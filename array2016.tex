@@ -371,6 +371,14 @@ Before dispatching to a method, the generated CUDA cude determines the type of t
 }
 \end{lstlisting}
 
+\paragraph{Object Layout}
+In the light of class tags, we extend the columnar object layout as follows. If Ikra cannot infer the type of an instance variable unambiguously, two columns are created for that instance variable: one for the class tag and one for the object ID.
+
+\paragraph{Polymorphism}
+In terms of type inference, subclasses are treated as entirely different types instead of subtypes. For example, if type inference determines that the type of a variable can be \texttt{Car} or \texttt{Pedestrian}, the type of that variable is the set $\{\texttt{Car}, \texttt{Pedestrian}\}$ instead of \texttt{Actor}. In this case, the type dispatch statements for a method call contains can handle only \texttt{Car} and \texttt{Pedestrian}, but not, for example, \texttt{Bus}, which is also a subclass of \texttt{Actor}. If a method is only implemented in a superclass (e.g., \texttt{Actor}), but not in the receiver's class itself (e.g., \texttt{Car}), the type dispatch statements can dispatch to that method directly, since that case can be detected at translation time. In addition to the object ID of the \texttt{self} (receiver) object, its class ID is also passed as an argument during method calls.
+
+Instance variables are stored together with the first class in the superclass hierarchy, in which they were used for the first time. For example, \texttt{@street} is stored as a column of class \texttt{Actor}. Subclasses and superclass share the same IDs. If an object is an instance of a different subclass, the corresponding column values are \emph{null} values~\cite{Mattis:2015:COI:2814228.2814230}. For example, if object 15 is a \texttt{Pedestrian}, then $A_{\texttt{Car}, \texttt{@max\_velocity}}[15]$ is null.
+
 \subsection{Read/write Analysis for Instance Variables}
 
 \subsection{Copying back Variables}
