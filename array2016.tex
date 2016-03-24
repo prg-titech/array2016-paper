@@ -155,12 +155,12 @@ escapechar=`,
 \captionsetup{labelfont=bf}
 
 \begin{abstract}
-We present Ikra, a Ruby-to-CUDA just-in-time compiler. The high-level goal of Ikra is to allow researchers, who are not familiar with CUDA and GPU-specific architectural details, to take advantage of GPU-based high-performance machines.
+We present Ikra, an array-based parallel extension to Ruby with a just-in-time compiler. The high-level goal of Ikra is to allow developers to exploit GPU-based high-performance computing without having to be familiar with intricate details of the underlying GPU infrastructure and CUDA. %researchers, who are not familiar with CUDA and GPU-specific architectural details, to take advantage of GPU-based high-perforResearch
 
 Ikra analyzes parallel sections in the form of array operations (e.g., \texttt{map}, \texttt{select}, or \texttt{each}), performs type inference upon invocation, and generates a CUDA kernel. To reduce thread divergence, Ikra reorders the base array based on the type information, which is useful for programs that were designed in an object-oriented way. Objects are represented as columns, giving rise to memory coalescing. Although programmers are advised to write statically-typed Ruby code for performance reasons, Ikra can generate CUDA code for expressions that can be one of multiple types using class tags.
 \end{abstract}
 
-\category{D.3.3}{Programming Languages}{Language Constructs and Features}
+\category{D.1.3}{Concurrent Programming}{Parallel Programming}
 
 % general terms are not compulsory anymore,
 % you may leave them out
@@ -168,7 +168,7 @@ Ikra analyzes parallel sections in the form of array operations (e.g., \texttt{m
 %term1, term2
 
 \keywords
-Class extension, context-oriented programming, mixins
+GPGPU, CUDA, Ruby, object-oriented programming
 
 \section{Introduction}
 With the availability and affordability of powerful GPUs, general purpose computing on graphics processing units (GPGPU) is becoming more and more popular in high-performance computing. Nowadays, many supercomputers rely on GPUs as main processing units, because they allow for massively parallel execution of algorithms or simulations with thousands of threads per GPU. However, GPU programming differs from traditional CPU programming, mostly because of architectural differences.
@@ -262,7 +262,7 @@ Ikra tries to avoid thread divergence by allocating jobs to warps automatically 
     \label{fig:ex_job_reorder}
 \end{figure}
 
-During job reordering the number of threads can increase as shown in Figure~\ref{fig:ex_job_reorder}. Jobs are reordered in such a way that no two elements of different type are allocated in the same warp. If the number of jobs of a particular type is not a multiple of the warp size, the last warp will not be filled up entirely, but some threads will not have a job, i.e., they are not \emph{no operation} threads. This might seem like a waste of computing power, but we expect the number of different types to be small (3 in this example).
+During job reordering the number of threads can increase as shown in Figure~\ref{fig:ex_job_reorder}. Jobs are reordered in such a way that no two elements of different types are allocated in the same warp. If the number of jobs of a particular type is not a multiple of the warp size, the last warp will not be filled up entirely, but some threads will not have a job, i.e., they are not \emph{no operation} threads. This might seem like a waste of computing power, but we expect the number of different types to be small (3 in this example).
 
 The job reordering array can be computed in linear time by scanning all elements of the base array twice. The following pseudo code is similar to counting sort and bucket sort~\cite{Corwin:2004:SLT:1040231.1040257}. It generates one array of indices per type (class) and concatenates these arrays, making sure that every new array starts at a multiple of the warp size $W$.
 
@@ -328,6 +328,18 @@ Reading an instance variable $v$ of object $o$ with type $c$ and ID $i$ translat
 
 Every instance method is translated to a device function, where the type $c$ is mangled into its name and the first parameter has type \texttt{int} and represents the ID of \texttt{self} object. Whenever Ikra encounters a method call during code translation, it determines the receiver's type and generates a call to the appropriate device function.
 
+\paragraph{Representation of Arrays}
+The previously-described mechanism for columnar objects works well with equally-sized objects, but not for variable-sized objects such as arrays. For example, the instance variable \texttt{@neighbors} of class \texttt{Street} is an array of streets.
+
+Ikra effectively represents such $n:m$ relationships as join tables~\cite{Garcia-Molina:2008:DSC:1450931} that are \emph{collapsed}. Such a table is sorted by object IDs for $n$. Furthermore, the $n$ column is not stored as a full column but as RLE tuples~\cite{Abadi:2006:ICE:1142473.1142548} consisting of an implicit ID for $n$, a start offset into the $m$ column, and a length value, distributed among multiple columns. RLE tuples are a well-known optimization in column databases.
+
+\begin{figure}[!htp]
+    \centering
+    \includegraphics[width=\columnwidth]{column_access.pdf}
+    \caption{Example: Array Representation for \texttt{@neighbors} ($n:m$ relationship). $(\texttt{Street.ID}, \texttt{Array.offset}, \texttt{Array.size})$ is an RLE tuple~\cite{Abadi:2006:ICE:1142473.1142548}.}
+    \label{fig:array_repr}
+\end{figure}
+
 
 %One approach to alleviate that problem is to aim for a high occupancy to hide memory latency, i.e., running a high number of threads, such that the GPU can switch execution to another warp while the current thread is blocking. Another optimization is to aim for coalesced mem
 
@@ -346,13 +358,13 @@ Before dispatching to a method, the generated CUDA cude determines the type of t
 
 \lstset{language=C++}
 \begin{lstlisting}
-<@\textbf{\_\_global\_\_ void}@> kernel(<@\textbf{int}@> *jobs, <@\textbf{int}@> *actor_tag, <@\textbf{int}@> *actor_id)
+<@\textbf{\_\_global\_\_ void}@> kernel(<@\textbf{int}@> *jobs, <@\textbf{int}@> *actor_tag, <@\textbf{int}@> *actor_id, <@\textbf{int}@> weather)
 {
   <@\textbf{int}@> tid = blockIdx.x * blockDim.x + threadIdx.x;
-  block(actor_tag[jobs[id]], actor_id[jobs[id]]);
+  block(actor_tag[jobs[id]], actor_id[jobs[id]], weather);
 }
 
-<@\textbf{\_\_device\_\_ void}@> block(<@\textbf{int}@> actor_tag, <@\textbf{int}@> actor_id)
+<@\textbf{\_\_device\_\_ void}@> block(<@\textbf{int}@> actor_tag, <@\textbf{int}@> actor_id, <@\textbf{int}@> weather)
 {
   <@\textbf{for}@> (<@\textbf{int}@> i = 0; i <= ticks; i++)
   {
@@ -380,48 +392,73 @@ In terms of type inference, subclasses are treated as entirely different types i
 Instance variables are stored together with the first class in the superclass hierarchy, in which they were used for the first time. For example, \texttt{@street} is stored as a column of class \texttt{Actor}. Subclasses and superclass share the same IDs. If an object is an instance of a different subclass, the corresponding column values are \emph{null} values~\cite{Mattis:2015:COI:2814228.2814230}. For example, if object 15 is a \texttt{Pedestrian}, then $A_{\texttt{Car}, \texttt{@max\_velocity}}[15]$ is null.
 
 \subsection{Read/write Analysis for Instance Variables}
-
-\subsection{Copying back Variables}
 \label{sec:impl_copyback}
+As part of type inference, Ikra analyzes if an instance variable is read and/or written. Only instance variables that are read or written are transferred to the GPU. Only instance variables that are written are transferred back to the Ruby side directly after kernel invocation. Ikra performs a may-be-read/may-be-written analysis, which can have false positives in case the type of an expression cannot be determined accurately. Ikra does not copy single instance variable values, but entire columns.
 
 \subsection{Object Tracer}
 \label{sec:impl_tracer}
+The object tracer is responsible for generating a list of object that must be transferred to the GPU before kernel invocation. It starts with a set of root object: all elements of the base array and lexical variables. Then, it traverses the object graph by following all instance variables. However, an instance variable value is visited only if that variable is read or written inside the parallel section. The entire process of tracing the object graph and assigning unique object IDs is similar to the \emph{system tracer} component in Smalltalk~\cite{Krasner:1983:SBH:226}.
 
+\section{Microbenchmarks}
 
-\section{Optimizations}
-% Only write back objects if they are accessed; how can we hook into object access? Proxies?
+\paragraph{Kernel Execution}
+Benchmark with/without job reordering and with/without columnar object layout (4 benchmarks)
 
+\paragraph{Job Reordering}
+Benchmark how long it takes to reorder jobs (2 dimensions: number of items, number of different types)
 
-\section{Benchmarks}
+\paragraph{Object Tracer}
+Benchmark how long it takes to trace a directed graph in adjacency list representation (2 dimensions: number of nodes, avg. vertex degree)
+
 
 \section{Related Work}
 
 \section{Future Work}
+This section gives a brief overview of ideas for future work on Ikra.
+
+\subsection{Minimizing Data Transfers}
+Our current Ikra implementation transfers objects to the GPU's global memory every time a kernel is invoked. However, memory access is one of the main bottlenecks of GPUs and should be avoided. Future versions of Ikra will try to minimize data transfers by only transferring changed object during consecutive kernel invocations, even if two different kernels were invoked. Similarly, objects should only be transferred back to the Ruby side once they are actually accessed. One promising approach replaces instance variable accessor methods with code that retrieves the actual value from the GPU and caches it.
+
+It is our vision that the parallel CUDA code is in full control of instance creation. The only reason for transferring data to the GPU should be cases where an object graph is loaded from an external source. For example, a researcher might want to load a street network of a real city from the file system. It is then not necessary to allocate this data structure both on the GPU and on Ruby side. The Ruby programs might, however, access certain objects and some of their instance variables for UI purposes or to display the result of a computation.
+
+\subsection{Data Modification}
+\label{sec:gen_new_obj}
+Ikra capabilities to modify data inside a parallel section are still limited, nevertheless sufficient for use cases like actor-based traffic simulations or OLAP applications, where data is mostly static.
+
+For example, new objects can be created only on the Ruby side, but not inside parallel sections. This is because instance variable columns must be increased when adding new objects. However, increasing their size might require moving them to a different place in the global memory, which is an expensive operation that should be avoided.
+
+As another example, it is currently not possible to add or remove elements from an array\footnote{Changing an element is allowed.}. Future versions of Ikra might store arrays separately instead of using a single big array (Figure~\ref{fig:array_repr}). Instead of storing an offset, this would require storing a pointer.
 
 \subsection{Nested Loops}
 \label{sec:nested_loops}
-Ikra does not yet support nested loops properly. Putting a \texttt{ticks} loop inside the \texttt{peach} block works but contradicts intuition. In a sequential program, most programmers would formulate the simulation code as a series of simulation ticks, where every simulation tick iterates over all actors, as opposed to iterating of over all actors, where every actor is moved for a series of simulation ticks.
+Ikra does not yet support nested loops properly. Consider the main loop of the traffic simulation as an example. Putting a \texttt{ticks} loop inside the \texttt{peach} block works but contradicts intuition. In a sequential program, most programmers would formulate the simulation code as a series of simulation ticks, where every simulation tick iterates over all actors, as opposed to iterating of over all actors, where every actor is moved for a series of simulation ticks (see listing).
 
 \begin{lstlisting}
-actors.peach do |actor|
-    for i in 1..ticks
-        actor.move(weather)
-        synchronize
-    end
-end
+actors.peach <@\textbf{do}@> |actor|
+  <@\textbf{for}@> i in 1..ticks
+    actor.move(weather)
+    synchronize
+  <@\textbf{end}@>
+<@\textbf{end}@>
 \end{lstlisting}
 
 The following code snippet is more intuitive, but would allocate one thread per tick instead of one thread per actor. However, the mechanism described in this paper takes advantage of allocating threads based on the actors' types.
 \begin{lstlisting}
-(1..ticks).peach do
-    actors.each do |actor|
-        actor.move(weather)
-    end
-end
+(1..ticks).peach <@\textbf{do}@>
+  actors.each <@\textbf{do}@> |actor|
+    actor.move(weather)
+  <@\textbf{end}@>
+<@\textbf{end}@>
 \end{lstlisting}
 
-\subsection{Generating New Objects}
-\label{sec:gen_new_obj}
+Nesting two parallel \texttt{peach} statements within each other is not supported at moment. Parallelization is allowed only on one level at the moment.
+
+\subsection{Performance Optimizations}
+Further ideas for performance optimizations include taking advantage of shared memory, which is much faster than global memory. However, it is not obvious what kind of data to store in shared memory because of its limited size.
+
+Ikra's columnar object layout is similar to the data layout of column databases. Future work might investigate to what degree optimizations in the area of column databases~\cite{DBLP:journals/ftdb/AbadiBHIM13, DBLP:journals/corr/LinMPS16} are applicable to a column-based object graph. Data compression mechansims for minimizing data transfer time look particularly promising, given the performance gap between global memory and shared memory, and have been subject to previous work in GPU computing~\cite{Patel:2012:PLD, Przymus2012}.
+
+% Only write back objects if they are accessed; how can we hook into object access? Proxies?
 
 \section{Conclusion}
 
