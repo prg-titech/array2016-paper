@@ -173,12 +173,12 @@ GPGPU, CUDA, Ruby, object-oriented programming
 \section{Introduction}
 With the availability and affordability of powerful GPUs, general purpose computing on graphics processing units (GPGPU) is becoming more and more popular in high-performance computing. Nowadays, many supercomputers rely on GPUs as main processing units, because they allow for massively parallel execution of algorithms or simulations with thousands of threads per GPU. However, GPU programming differs from traditional CPU programming, mostly because of architectural differences.
 
-The goal of the Ikra project is to make GPU programming available to researchers who are not familiar with the details of GPUs their programming languages. Ikra is a library for Ruby that translates parallel sections to CUDA code and executes them in parallel on GPUs. We target the Ruby programming language because it provides powerful mechanisms for embedding DSLs in the language, which will be useful for later experiments.
+The goal of the Ikra project is to make GPU programming available to researchers who are not familiar with the details of GPUs and their programming languages. Ikra is a library for Ruby that translates parallel sections to CUDA code and executes them in parallel on GPUs. It extends our previous work~\cite{Masuhara:2012:DER:2237887.2237888} with a just-in-time approach to allow for a larger number of optimizations and tighter integration with Ruby. We target the Ruby programming language because it provides powerful mechanisms for embedding DSLs in the language, which will be useful for later experiments.
 
 \section{Example: Actor-based Traffic Simulation}
 A simple actor-based traffic simulation will serve as a running example in this paper. The basic idea is to simulate the behavior of a number of actors (e.g., cars, buses, pedestrians, etc.), given a street network as a directed graph (Figure~\ref{fig:running_example}) in adjacency list representation. Every actor is located on one street. Every street has a \emph{length} attribute and every actor has a \emph{progress} attribute representing the distance from the beginning of the street. Once these two attributes have the same value, the actor reached an intersection and should be moved to a different street (or make a U-turn if there is no other neighboring street).
 
-A car moves at a constant speed of \texttt{@max\_velocity}. A predestrian moves at a random speed between $-0.5 \times \texttt{@max\_velocity}$ and $\texttt{@max\_velocity}$, i.e., a pedestrian can make negative progress. This is how we model strolling pedestrains. Furthermore, the progress of actors might be affected by weather conditions depending on their type. For example, cars slow down if the weather conditions are bad, whereas pedestrians are not affected by weather conditions.
+A car moves at a constant speed of $\min(M_c, M_s)$, where $M_c$ is the maximum velocity of the car and $M_s$ is the maximum speed allowed on the current street. A predestrian moves at a random speed between $-2$~mph and $4$~mph, i.e., a pedestrian can make negative progress. This is how we model strolling pedestrains. Furthermore, the progress of actors might be affected by weather conditions depending on their type. For example, cars slow down if the weather conditions are bad, whereas pedestrians are not affected by weather conditions.
 
 \begin{figure}[!htp]
     \centering
@@ -291,7 +291,7 @@ The job reordering array can be computed in linear time by scanning all elements
 
 
 \subsection{Columnar Object Layout}
-Objects are typically represented row-wise, i.e., every object is a contiguous chunk of data in the memory. Based on observations in previous work on GPU-powered database query execution~\cite{Bakkum:2010:ASD:1735688.1735706} where a column-wise data organization proved to be superior compared to a traditional row-based data layout, Ikra stores objects in a columnar layout~\cite{Mattis:2015:COI:2814228.2814230}.
+Objects are typically represented row-wise, i.e., every object is a contiguous chunk of data in the memory. However, in GPU programming is common practice to work with multiple arrays of structure fields instead of one array of structures.
 
 \paragraph{Memory Coalescing}
 Global memory is one of the main bottlenecks of GPUs. One approach is to aim for memory access patterns where memory that is accessed in parallel by a number of threads is spatially local. Such memory accesses can be coalesced, i.e., the GPU can process such accesses in a single request, alleviating the global memory bottleneck.
@@ -412,6 +412,9 @@ Benchmark how long it takes to trace a directed graph in adjacency list represen
 
 
 \section{Related Work}
+Columnar data layouts are known to be superior compared to row-based data layouts for certain kinds of database queries (e.g., OLAP queries)~\cite{Plattner:2009:CDA:1559845.1559846}, and especially for GPU-powered databases~\cite{Bakkum:2010:ASD:1735688.1735706}. In fact, one of the benefits of column stores for CPU-based database systems is \emph{prefetching}, which is similar to coalescing on GPUs, but without the parallel aspect. Columnar data layouts have also been evaluated for object-oriented programming languages. Mattis et al. have implemented a columnar object layout in Pypy to increase the performance of analytical queries~\cite{Mattis:2015:COI:2814228.2814230}. Ikra essentially uses the same columnar object layout.
+
+A number of different techniques exist for avoiding thread divergence, e.g., detecting and delaying divergent branches at runtime in order to execute them at a later time, or factoring out instructions that are common to two (divergent) branches~\cite{Han:2011:RBD:1964179.1964184}. A different approach is to reorder jobs, either with a reordering array (which is what Ikra does) or by physically changing the order of the jobs in the base array. Both techinques can be combined to increase memory coalescing~\cite{Zhang:2011:OED:1950365.1950408} (physically reordering data, then using a reordering array to restore the original semantics), but detailed knowledge about memory access patterns is required. Previous work has also investigated how the overhead of these transformations can be hidden using a CPU-GPU pipelining scheme~\cite{Zhang:2010:SGA:1810085.1810104}, if done at runtime in order to react to changes.
 
 \section{Future Work}
 This section gives a brief overview of ideas for future work on Ikra.
