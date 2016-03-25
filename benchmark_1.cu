@@ -23,65 +23,100 @@
 
 using namespace std;
 
-__device__ float *Actor_progress;
-__device__ int *Actor_street;
-__device__ float *Car_max_velocity;
-__device__ float *Street_length;
-__device__ float *Street_max_velocity;
-__device__ int *Street_neighbors;
-__device__ int *Array_Street_size;
-__device__ int *Array_Street_offset;
-__device__ int *Array_Street_arrays;
-__device__ int *input_actor_tag;
-__device__ int *input_actor_id;
-__device__ int *jobs;
-__shared__ curandState_t rand_state;
+// Define this to turn on error checking
+#define CUDA_ERROR_CHECK
+
+#define CudaSafeCall( err ) __cudaSafeCall( err, __FILE__, __LINE__ )
+#define CudaCheckError()    __cudaCheckError( __FILE__, __LINE__ )
+
+inline void __cudaSafeCall( cudaError err, const char *file, const int line )
+{
+#ifdef CUDA_ERROR_CHECK
+    if ( cudaSuccess != err )
+    {
+        fprintf( stderr, "cudaSafeCall() failed at %s:%i : %s\n",
+                 file, line, cudaGetErrorString( err ) );
+        exit( -1 );
+    }
+#endif
+
+    return;
+}
+
+inline void __cudaCheckError( const char *file, const int line )
+{
+#ifdef CUDA_ERROR_CHECK
+    cudaError err = cudaGetLastError();
+    if ( cudaSuccess != err )
+    {
+        fprintf( stderr, "cudaCheckError() failed at %s:%i : %s\n",
+                 file, line, cudaGetErrorString( err ) );
+        exit( -1 );
+    }
+
+    // More careful checking. However, this will affect performance.
+    // Comment away if needed.
+    err = cudaDeviceSynchronize();
+    if( cudaSuccess != err )
+    {
+        fprintf( stderr, "cudaCheckError() with sync failed at %s:%i : %s\n",
+                 file, line, cudaGetErrorString( err ) );
+        exit( -1 );
+    }
+#endif
+
+    return;
+}
+
+__device__ float *d_Actor_progress;
+__device__ int *d_Actor_street;
+__device__ float *d_Car_max_velocity;
+__device__ float *d_Street_length;
+__device__ float *d_Street_max_velocity;
+__device__ int *d_Street_neighbors;
+__device__ int *d_Array_Street_size;
+__device__ int *d_Array_Street_offset;
+__device__ int *d_Array_Street_arrays;
+__device__ int *d_input_actor_tag;
+__device__ int *d_input_actor_id;
+__device__ int *d_jobs;
+__shared__ curandState_t d_rand_state;
 
 __device__ void method_Car_move(int actor_id, int weather)
 {
 	float weather_multiplier;
 	if (weather == GOOD_WEATHER) 
 	{
-		weather_multiplier = 1.0
+		weather_multiplier = 1.0;
 	}
 	else if (weather == BAD_WEATHER)
 	{
 		weather_multiplier = 0.75;
 	}
 
-	float speed = min(Car_max_velocity[actor_id], Street_max_velocity[Actor_street[actor_id]]) * weather_multiplier;
-	Actor_progress[actor_id] = Actor_progress[actor_id] + (speed / 60.0); /* 1 tick = 1 minute */
+	float speed = min(d_Car_max_velocity[actor_id], d_Street_max_velocity[d_Actor_street[actor_id]]) * weather_multiplier;
+	d_Actor_progress[actor_id] = d_Actor_progress[actor_id] + (speed / 60.0); /* 1 tick = 1 minute */
 
-	if (Actor_progress[actor_id] >= Street_length[Actor_street[actor_id]])
+	if (d_Actor_progress[actor_id] >= d_Street_length[d_Actor_street[actor_id]])
 	{
 		// move to different street
-		int array_id = Street_neighbors[Actor_street[actor_id]];
-		int neighbor_index = curand(&state) % Array_Street_size[array_id];
-		Actor_street[actor_id] = Array_Street_arrays[Array_Street_offset[array_id] + neighbor_index];
+		int array_id = d_Street_neighbors[d_Actor_street[actor_id]];
+		int neighbor_index = curand(&d_rand_state) % d_Array_Street_size[array_id];
+		d_Actor_street[actor_id] = d_Array_Street_arrays[d_Array_Street_offset[array_id] + neighbor_index];
 	}
 }
 
 __device__ void method_Pedestrian_move(int actor_id, int weather)
 {
-	float weather_multiplier;
-	if (weather == GOOD_WEATHER) 
-	{
-		weather_multiplier = 1.0
-	}
-	else if (weather == BAD_WEATHER)
-	{
-		weather_multiplier = 0.75;
-	}
+	float speed = curand(&d_rand_state) % 7 - 2;
+	d_Actor_progress[actor_id] = d_Actor_progress[actor_id] + (speed / 60.0); /* 1 tick = 1 minute */
 
-	float speed = curand(&state) % 7 - 2;
-	Actor_progress[actor_id] = Actor_progress[actor_id] + (speed / 60.0); /* 1 tick = 1 minute */
-
-	if (Actor_progress[actor_id] >= Street_length[Actor_street[actor_id]])
+	if (d_Actor_progress[actor_id] >= d_Street_length[d_Actor_street[actor_id]])
 	{
 		// move to different street
-		int array_id = Street_neighbors[Actor_street[actor_id]];
-		int neighbor_index = curand(&state) % Array_Street_size[array_id];
-		Actor_street[actor_id] = Array_Street_arrays[Array_Street_offset[array_id] + neighbor_index];
+		int array_id = d_Street_neighbors[d_Actor_street[actor_id]];
+		int neighbor_index = curand(&d_rand_state) % d_Array_Street_size[array_id];
+		d_Actor_street[actor_id] = d_Array_Street_arrays[d_Array_Street_offset[array_id] + neighbor_index];
 	}
 }
 
@@ -107,12 +142,12 @@ __global__ void kernel(int weather,	int ticks)
 
 	if (threadIdx.x == 1)
 	{
-		curand_init(42, 0, 0, &state);
+		curand_init(42, 0, 0, &d_rand_state);
 	}
 
 	__syncthreads();
 
-	block(input_actor_tag[jobs[tid]], input_actor_id[jobs[tid]], weather, ticks);
+	block(d_input_actor_tag[d_jobs[tid]], d_input_actor_id[d_jobs[tid]], weather, ticks);
 }
 
 int main()
@@ -140,7 +175,7 @@ int main()
 	for (int i = 0; i < NUM_STREETS; i++)
 	{
 		Array_Street_offset[i] = num_connections;
-		int connections = rand() % MAX_CONNECTIONS + 1
+		int connections = rand() % MAX_CONNECTIONS + 1;
 		Array_Street_size[i] = connections;
 		num_connections += connections;
 	}
@@ -153,8 +188,8 @@ int main()
 
 	// actors
 	int *Actor_street = new int[NUM_PEDS + NUM_CARS];
-	float *Actor_progress = new int[NUM_PEDS + NUM_CARS];
-	int *Car_max_velocity = new float[NUM_CARS + NUM_PEDS];
+	float *Actor_progress = new float[NUM_PEDS + NUM_CARS];
+	int *Car_max_velocity = new int[NUM_CARS + NUM_PEDS];
 	int *Actor_tag = new int[NUM_PEDS + NUM_CARS];
 	int *Actor_id = new int[NUM_PEDS + NUM_CARS];
 
@@ -177,7 +212,7 @@ int main()
 		Actor_id[i] = i;
 	}
 
-	shuffle(Actor_tag, Actor_tag + NUM_CARS + NUM_PEDS, std::default_random_engine(42));
+	//shuffle(Actor_tag, Actor_tag + NUM_CARS + NUM_PEDS, std::default_random_engine(42));
 
 	// jobs (dummy)
 	int *jobs = new int[NUM_PEDS + NUM_CARS];
@@ -190,21 +225,24 @@ int main()
 	printf("Scenario set up.\n");
 
 	printf("Copying data to GPU...\n");
-	cudaMemcpyToSymbol("Actor_progress", &Actor_progress[0], sizeof(float) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("Actor_street", &Actor_street[0], sizeof(int) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("Car_max_velocity", &Car_max_velocity[0], sizeof(float) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("Street_length", &Street_length[0], sizeof(float) * NUM_STREETS, size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("Street_max_velocity", &Street_max_velocity[0], sizeof(float) * NUM_STREETS, size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("Street_neighbors", &Street_neighbors[0], sizeof(int) * NUM_STREETS, size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("Array_Street_size", &Array_Street_size[0], sizeof(int) * NUM_STREETS, size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("Array_Street_offset", &Array_Street_offset[0], sizeof(int) * NUM_STREETS, size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("Array_Street_arrays", &Array_Street_arrays[0], sizeof(int) * num_connections, size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("input_actor_tag", &Actor_tag[0], sizeof(int) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("input_actor_id", &Actor_id[0], sizeof(int) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("jobs", &jobs[0], sizeof(int) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice);
+	CudaSafeCall(cudaMemcpyToSymbol(d_Actor_progress, &Actor_progress[0], sizeof(float) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice));
+	cudaMemcpyToSymbol("d_Actor_street", &Actor_street[0], sizeof(int) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice);
+	cudaMemcpyToSymbol("d_Car_max_velocity", &Car_max_velocity[0], sizeof(float) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice);
+	cudaMemcpyToSymbol("d_Street_length", &Street_length[0], sizeof(float) * NUM_STREETS, size_t(0), cudaMemcpyHostToDevice);
+	cudaMemcpyToSymbol("d_Street_max_velocity", &Street_max_velocity[0], sizeof(float) * NUM_STREETS, size_t(0), cudaMemcpyHostToDevice);
+	cudaMemcpyToSymbol("d_Street_neighbors", &Street_neighbors[0], sizeof(int) * NUM_STREETS, size_t(0), cudaMemcpyHostToDevice);
+	cudaMemcpyToSymbol("d_Array_Street_size", &Array_Street_size[0], sizeof(int) * NUM_STREETS, size_t(0), cudaMemcpyHostToDevice);
+	cudaMemcpyToSymbol("d_Array_Street_offset", &Array_Street_offset[0], sizeof(int) * NUM_STREETS, size_t(0), cudaMemcpyHostToDevice);
+	cudaMemcpyToSymbol("d_Array_Street_arrays", &Array_Street_arrays[0], sizeof(int) * num_connections, size_t(0), cudaMemcpyHostToDevice);
+	cudaMemcpyToSymbol("d_input_actor_tag", &Actor_tag[0], sizeof(int) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice);
+	cudaMemcpyToSymbol("d_input_actor_id", &Actor_id[0], sizeof(int) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice);
+	cudaMemcpyToSymbol("d_jobs", &jobs[0], sizeof(int) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice);
 	printf("Finished copying data.\n");
 
 	printf("Launching kernel...\n");
-	kernel<<<dim3(32), dim3((NUM_PEDS + NUM_CARS) / 32)>>>(GOOD_WEATHER, 10);
+	kernel<<<dim3(32), dim3((NUM_PEDS + NUM_CARS) / 32)>>>(GOOD_WEATHER, 1000000);
+	CudaCheckError();
 	printf("Kernel finished.\n");
+
+	//cudaMemcpy(Actor_progress, d_Actor_progress,)
 }
