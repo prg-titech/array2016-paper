@@ -136,8 +136,25 @@ __device__ void block(int actor_tag, int actor_id, int weather, int ticks)
 	}
 }
 
-__global__ void kernel(int weather,	int ticks)
+__global__ void kernel(int weather,	int ticks,
+	float *v_d_Actor_progress, int *v_d_Actor_street, float *v_d_Car_max_velocity,
+	float *v_d_Street_length, float *v_d_Street_max_velocity, int *v_d_Street_neighbors,
+	int *v_d_Array_Street_size, int *v_d_Array_Street_offset, int *v_d_Array_Street_arrays,
+	int *v_d_input_actor_tag, int *v_d_input_actor_id, int *v_d_jobs)
 {
+	d_Actor_progress = v_d_Actor_progress;
+	d_Actor_street = v_d_Actor_street;
+	d_Car_max_velocity = v_d_Car_max_velocity;
+	d_Street_length = v_d_Street_length;
+	d_Street_max_velocity = v_d_Street_max_velocity;
+	d_Street_neighbors = v_d_Street_neighbors;
+	d_Array_Street_size = v_d_Array_Street_size;
+	d_Array_Street_offset = v_d_Array_Street_offset;
+	d_Array_Street_arrays = v_d_Array_Street_arrays;
+	d_input_actor_tag = v_d_input_actor_tag;
+	d_input_actor_id = v_d_input_actor_id;
+	d_jobs = v_d_jobs;
+
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (threadIdx.x == 1)
@@ -225,22 +242,51 @@ int main()
 	printf("Scenario set up.\n");
 
 	printf("Copying data to GPU...\n");
-	CudaSafeCall(cudaMemcpyToSymbol(d_Actor_progress, &Actor_progress[0], sizeof(float) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice));
-	cudaMemcpyToSymbol("d_Actor_street", &Actor_street[0], sizeof(int) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("d_Car_max_velocity", &Car_max_velocity[0], sizeof(float) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("d_Street_length", &Street_length[0], sizeof(float) * NUM_STREETS, size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("d_Street_max_velocity", &Street_max_velocity[0], sizeof(float) * NUM_STREETS, size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("d_Street_neighbors", &Street_neighbors[0], sizeof(int) * NUM_STREETS, size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("d_Array_Street_size", &Array_Street_size[0], sizeof(int) * NUM_STREETS, size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("d_Array_Street_offset", &Array_Street_offset[0], sizeof(int) * NUM_STREETS, size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("d_Array_Street_arrays", &Array_Street_arrays[0], sizeof(int) * num_connections, size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("d_input_actor_tag", &Actor_tag[0], sizeof(int) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("d_input_actor_id", &Actor_id[0], sizeof(int) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice);
-	cudaMemcpyToSymbol("d_jobs", &jobs[0], sizeof(int) * (NUM_PEDS + NUM_CARS), size_t(0), cudaMemcpyHostToDevice);
+	float *v_d_Actor_progress;
+	int *v_d_Actor_street;
+	float *v_d_Car_max_velocity;
+	float *v_d_Street_length;
+	float *v_d_Street_max_velocity;
+	int *v_d_Street_neighbors;
+	int *v_d_Array_Street_size;
+	int *v_d_Array_Street_offset;
+	int *v_d_Array_Street_arrays;
+	int *v_d_input_actor_tag;
+	int *v_d_input_actor_id;
+	int *v_d_jobs;
+
+	CudaSafeCall(cudaMalloc((void**) &v_d_Actor_progress, sizeof(float) * (NUM_PEDS + NUM_CARS)));
+	CudaSafeCall(cudaMalloc((void**) &v_d_Actor_street, sizeof(int) * (NUM_PEDS + NUM_CARS)));
+	CudaSafeCall(cudaMalloc((void**) &v_d_Car_max_velocity, sizeof(float) * (NUM_PEDS + NUM_CARS)));
+	CudaSafeCall(cudaMalloc((void**) &v_d_Street_length, sizeof(float) * NUM_STREETS));
+	CudaSafeCall(cudaMalloc((void**) &v_d_Street_max_velocity, sizeof(float) * NUM_STREETS));
+	CudaSafeCall(cudaMalloc((void**) &v_d_Street_neighbors, sizeof(int) * NUM_STREETS));
+	CudaSafeCall(cudaMalloc((void**) &v_d_Array_Street_size, sizeof(int) * NUM_STREETS));
+	CudaSafeCall(cudaMalloc((void**) &v_d_Array_Street_offset, sizeof(int) * NUM_STREETS));
+	CudaSafeCall(cudaMalloc((void**) &v_d_Array_Street_arrays, sizeof(int) * num_connections));
+	CudaSafeCall(cudaMalloc((void**) &v_d_input_actor_tag, sizeof(int) * (NUM_PEDS + NUM_CARS)));
+	CudaSafeCall(cudaMalloc((void**) &v_d_input_actor_id, sizeof(int) * (NUM_PEDS + NUM_CARS)));
+	CudaSafeCall(cudaMalloc((void**) &v_d_jobs, sizeof(int) * (NUM_PEDS + NUM_CARS)));
+
+	CudaSafeCall(cudaMemcpy(v_d_Actor_progress, &Actor_progress[0], sizeof(float) * (NUM_PEDS + NUM_CARS), cudaMemcpyHostToDevice));
+	CudaSafeCall(cudaMemcpy(v_d_Actor_street, &Actor_street[0], sizeof(int) * (NUM_PEDS + NUM_CARS), cudaMemcpyHostToDevice));
+	CudaSafeCall(cudaMemcpy(v_d_Car_max_velocity, &Car_max_velocity[0], sizeof(float) * (NUM_PEDS + NUM_CARS), cudaMemcpyHostToDevice));
+	CudaSafeCall(cudaMemcpy(v_d_Street_length, &Street_length[0], sizeof(float) * NUM_STREETS, cudaMemcpyHostToDevice));
+	CudaSafeCall(cudaMemcpy(v_d_Street_max_velocity, &Street_max_velocity[0], sizeof(float) * NUM_STREETS, cudaMemcpyHostToDevice));
+	CudaSafeCall(cudaMemcpy(v_d_Street_neighbors, &Street_neighbors[0], sizeof(int) * NUM_STREETS, cudaMemcpyHostToDevice));
+	CudaSafeCall(cudaMemcpy(v_d_Array_Street_size, &Array_Street_size[0], sizeof(int) * NUM_STREETS, cudaMemcpyHostToDevice));
+	CudaSafeCall(cudaMemcpy(v_d_Array_Street_offset, &Array_Street_offset[0], sizeof(int) * NUM_STREETS, cudaMemcpyHostToDevice));
+	CudaSafeCall(cudaMemcpy(v_d_Array_Street_arrays, &Array_Street_arrays[0], sizeof(int) * num_connections, cudaMemcpyHostToDevice));
+	CudaSafeCall(cudaMemcpy(v_d_input_actor_tag, &Actor_tag[0], sizeof(int) * (NUM_PEDS + NUM_CARS), cudaMemcpyHostToDevice));
+	CudaSafeCall(cudaMemcpy(v_d_input_actor_id, &Actor_id[0], sizeof(int) * (NUM_PEDS + NUM_CARS), cudaMemcpyHostToDevice));
+	CudaSafeCall(cudaMemcpy(v_d_jobs, &jobs[0], sizeof(int) * (NUM_PEDS + NUM_CARS), cudaMemcpyHostToDevice));
 	printf("Finished copying data.\n");
 
 	printf("Launching kernel...\n");
-	kernel<<<dim3(32), dim3((NUM_PEDS + NUM_CARS) / 32)>>>(GOOD_WEATHER, 1000000);
+	kernel<<<dim3(32), dim3((NUM_PEDS + NUM_CARS) / 32)>>>(GOOD_WEATHER, 1000000, 
+		v_d_Actor_progress, v_d_Actor_street, v_d_Car_max_velocity, v_d_Street_length, v_d_Street_max_velocity,
+		v_d_Street_neighbors, v_d_Array_Street_size, v_d_Array_Street_offset, v_d_Array_Street_arrays, v_d_input_actor_tag,
+		v_d_input_actor_id, v_d_jobs);
 	CudaCheckError();
 	printf("Kernel finished.\n");
 
