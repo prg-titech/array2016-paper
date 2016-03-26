@@ -185,7 +185,7 @@ A car moves at a constant speed of $\min(M_c, M_s)$, where $M_c$ is the maximum 
     \subfloat[Actual street network (map)]{{\includegraphics[width=\columnwidth]{running_example.pdf} }}%
     
     \subfloat[Street network as directed graph]{{\includegraphics[width=\columnwidth]{running_example_graph.pdf} }}%
-    \caption{Street Network for Traffic Simulation}
+    \caption{Example: Street Network for Traffic Simulation}
     \label{fig:running_example}%
 \end{figure}
 
@@ -400,7 +400,7 @@ As part of type inference, Ikra analyzes if an instance variable is read and/or 
 The object tracer is responsible for generating a list of object that must be transferred to the GPU before kernel invocation. It starts with a set of root object: all elements of the base array and lexical variables. Then, it traverses the object graph by following all instance variables. However, an instance variable value is visited only if that variable is read or written inside the parallel section. The entire process of tracing the object graph and assigning unique object IDs is similar to the \emph{system tracer} component in Smalltalk~\cite{Krasner:1983:SBH:226}.
 
 \section{Microbenchmarks}
-To evaluate our optimizations, we conducted a series of microbenchmarks using the traffic simulation example\footnote{\texttt{git@github.com:matthias-springer/array2016-paper.git}}. We ran benchmarks on the Tsubame supercomputer\footnote{\url{http://tsubame.gsic.titech.ac.jp/}} on a node with an Intel Xeon X5670 CPU, 54~GB RAM, and an nVidia Tesla K20Xm GPU, running Linux \texttt{3.0.76-0.11-default x86\_64} and CUDA 7.0.27.
+To evaluate our optimizations, we conducted a series of microbenchmarks using the traffic simulation example\footnote{\texttt{git@github.com:matthias-springer/array2016-paper.git}}. We ran benchmarks on the Tsubame supercomputer\footnote{\url{http://tsubame.gsic.titech.ac.jp/}} on a \emph{thin} compute node with two Intel Xeon X5670 CPUs (2.93~GHz $\times$ 6 cores each), 54~GB RAM, and an nVidia Tesla K20Xm GPU, running Linux \texttt{3.0.76-0.11-default x86\_64}, CUDA 7.0.27, and Ruby 1.9.3p448.
 
 We simulated 1,000,000 iterations of a random street network with 500 streets and random vertex out-degrees between 1 and 10, 4096 cars, and 16384 pedestrians. All benchmark running times are average values of 5 runs\footnote{GPU running times showed a very low standard deviation.} using the same random scenario.
 
@@ -408,26 +408,33 @@ We simulated 1,000,000 iterations of a random street network with 500 streets an
 Figure~\ref{fig:bench_kernel} shows the kernel runtime of the traffic simulation in various configurations. Figure~\ref{fig:bench_kernel}a shows the runtime with a columnar object layout, which is around 30\% faster than the row-based layout in Figure~\ref{fig:bench_kernel}b.
 
 \begin{figure}[!htp]
-    \includegraphics[width=\columnwidth]{bench_1.pdf}
+    \includegraphics[width=0.95\columnwidth]{bench_1.pdf}
     \centering
-    \caption{Kernel Runtime for Traffic Simulation}
+    \caption{Kernel Runtime for Traffic Simulation (CUDA)}
     \label{fig:bench_kernel}
 \end{figure}
 
 The objects involved in this example are quite small. Actors are represented by 32-byte structs (three instance variables and class tag) in row-based layout, or three 4-byte columns (class tag is passed as an argument) in a columnar layout, respectively. The GPU's L1 cache is 48~KB, with a cache line size of 128~bytes. To analyze the effect of caching, we ran the row-based benchmark with artificially enlarged object sizes (10/5 additional instance variables for actors/streets, resulting in an object size of 72~bytes/32~bytes, respectively; Figure~\ref{fig:bench_kernel}c). This configuration is interesting because the example code accesses all instance variables of an actor subsequently, diminishing the advantage of a column-based layout, because the entire object (and three subsequent objects) can be held in cache. A columnar object layout is around 60\% faster compared to this configuration.
 
 \paragraph{Job Reordering}
-Figure~\ref{fig:job_reorder_arr} shows the runtime for generating the job reordering array (warp size 32). This is currently done in the Ruby interpreter but could be moved to the GPU side in future versions. The runtime increases linearly with the number of elements in the base array. Changing the number of types (classes) has only a small effect on the runtime. We assume that this number is much smaller than the number of elements. For the traffic simuation example, the runtime for generating the job reordering array is neglectable.
+Figure~\ref{fig:job_reorder_arr} shows the runtime of generating the job reordering array (warp size 32). This is currently done in the Ruby interpreter but could be moved to the GPU side in future versions. The runtime increases linearly with the number of elements in the base array. Changing the number of types (classes) has only a small effect on the runtime. We assume that this number is much smaller than the number of elements. For the traffic simuation example, the runtime for generating the job reordering array is neglectable.
 
 \begin{figure}[!htp]
-    \includegraphics[width=\columnwidth]{plot_reorder.pdf}
+    \includegraphics[width=0.9\columnwidth]{plot_reorder.pdf}
     \centering
     \caption{Runtime for Generating Job Reordering Array (Ruby)}
     \label{fig:job_reorder_arr}
 \end{figure}
 
-\paragraph{Object Tracer}
-Benchmark how long it takes to trace a directed graph in adjacency list representation (2 dimensions: number of nodes, avg. vertex degree)
+\paragraph{Tracing Object and Generating Columns}
+Figure~\ref{fig:tracing} shows the runtime of tracing objects and generating columns for the traffic simulation example. For the number of actors/streets that were used in the previous benchmarks, the runtime is neglectable. Moreover, in future plans for Ikra we want to perform this step only once and reuse data that was already processed and moved to the GPU earlier (see Section~\ref{sec:minimizing_dtr}).
+
+\begin{figure}[!htp]
+    \includegraphics[width=\columnwidth]{obj_tracer.pdf}
+    \centering
+    \caption{Runtime for Tracing Objects and Generating Columns (Ruby)}
+    \label{fig:tracing}
+\end{figure}
 
 
 \section{Related Work}
@@ -439,6 +446,7 @@ A number of different techniques exist for avoiding thread divergence, e.g., det
 This section gives a brief overview of ideas for future work on Ikra.
 
 \subsection{Minimizing Data Transfers}
+\label{sec:minimizing_dtr}
 Our current Ikra implementation transfers objects to the GPU's global memory every time a kernel is invoked. However, memory access is one of the main bottlenecks of GPUs and should be avoided. Future versions of Ikra will try to minimize data transfers by only transferring changed object during consecutive kernel invocations, even if two different kernels were invoked. Similarly, objects should only be transferred back to the Ruby side once they are actually accessed. One promising approach replaces instance variable accessor methods with code that retrieves the actual value from the GPU and caches it.
 
 It is our vision that the parallel CUDA code is in full control of instance creation. The only reason for transferring data to the GPU should be cases where an object graph is loaded from an external source. For example, a researcher might want to load a street network of a real city from the file system. It is then not necessary to allocate this data structure both on the GPU and on Ruby side. The Ruby programs might, however, access certain objects and some of their instance variables for UI purposes or to display the result of a computation.
