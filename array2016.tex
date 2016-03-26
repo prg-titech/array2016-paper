@@ -352,7 +352,7 @@ Ikra embeds dynamic types into CUDA's static type system by generating explicit 
 \paragraph{Class Tags}
 To support dynamically-typed expressions, we extend the idea of class-specific object IDs as follows. The following mechansim is applied only if the type of an expression or variable cannot be uniquely inferred. Otherwise, the previously described (non-extended) mechanism is applied. 
 
-Whenever an object ID was previously used, we now use a tuple of object ID and \emph{class ID}. A class ID is a unique \texttt{int} identifier for a certain class. Class tags are used for object references and for method calls. A Ruby variable is now represented by two CUDA \texttt{int} variables: one for the class tag and one for the object ID. Similarly, when passing an object as an argument, the same two arguments are passed in the generated CUDA code.
+Whenever an object ID was previously used, we now use a tuple of object ID and \emph{class tag}. A class tag is a unique \texttt{int} identifier for a certain class. Class tags are used for object references and for method calls. A Ruby variable is now represented by two CUDA \texttt{int} variables: one for the class tag and one for the object ID. Similarly, when passing an object as an argument, the same two arguments are passed in the generated CUDA code.
 
 Before dispatching to a method, the generated CUDA cude determines the type of the receiver in a switch statement to select the corresponding instance method. In the following example, two arrays (actor tags and actor IDs) are passed to the kernel function. The device function representing the block invokes the correct instance method.
 
@@ -387,7 +387,7 @@ Before dispatching to a method, the generated CUDA cude determines the type of t
 In the light of class tags, we extend the columnar object layout as follows. If Ikra cannot infer the type of an instance variable unambiguously, two columns are created for that instance variable: one for the class tag and one for the object ID.
 
 \paragraph{Polymorphism}
-In terms of type inference, subclasses are treated as entirely different types instead of subtypes. For example, if type inference determines that the type of a variable can be \texttt{Car} or \texttt{Pedestrian}, the type of that variable is the set $\{\texttt{Car}, \texttt{Pedestrian}\}$ instead of \texttt{Actor}. In this case, the type dispatch statements for a method call contains can handle only \texttt{Car} and \texttt{Pedestrian}, but not, for example, \texttt{Bus}, which is also a subclass of \texttt{Actor}. If a method is only implemented in a superclass (e.g., \texttt{Actor}), but not in the receiver's class itself (e.g., \texttt{Car}), the type dispatch statements can dispatch to that method directly, since that case can be detected at translation time. In addition to the object ID of the \texttt{self} (receiver) object, its class ID is also passed as an argument during method calls.
+In terms of type inference, subclasses are treated as entirely different types instead of subtypes. For example, if type inference determines that the type of a variable can be \texttt{Car} or \texttt{Pedestrian}, the type of that variable is the set $\{\texttt{Car}, \texttt{Pedestrian}\}$ instead of \texttt{Actor}. In this case, the type dispatch statements for a method call contains can handle only \texttt{Car} and \texttt{Pedestrian}, but not, for example, \texttt{Bus}, which is also a subclass of \texttt{Actor}. If a method is only implemented in a superclass (e.g., \texttt{Actor}), but not in the receiver's class itself (e.g., \texttt{Car}), the type dispatch statements can dispatch to that method directly, since that case can be detected at translation time. In addition to the object ID of the \texttt{self} (receiver) object, its class tag is also passed as an argument during method calls.
 
 Instance variables are stored together with the first class in the superclass hierarchy, in which they were used for the first time. For example, \texttt{@street} is stored as a column of class \texttt{Actor}. Subclasses and superclass share the same IDs. If an object is an instance of a different subclass, the corresponding column values are \emph{null} values~\cite{Mattis:2015:COI:2814228.2814230}. For example, if object 15 is a \texttt{Pedestrian}, then $A_{\texttt{Car}, \texttt{@max\_velocity}}[15]$ is null.
 
@@ -400,9 +400,21 @@ As part of type inference, Ikra analyzes if an instance variable is read and/or 
 The object tracer is responsible for generating a list of object that must be transferred to the GPU before kernel invocation. It starts with a set of root object: all elements of the base array and lexical variables. Then, it traverses the object graph by following all instance variables. However, an instance variable value is visited only if that variable is read or written inside the parallel section. The entire process of tracing the object graph and assigning unique object IDs is similar to the \emph{system tracer} component in Smalltalk~\cite{Krasner:1983:SBH:226}.
 
 \section{Microbenchmarks}
+To evaluate our optimizations, we conducted a series of microbenchmarks using the traffic simulation example\footnote{\texttt{git@github.com:matthias-springer/array2016-paper.git}}. We ran benchmarks on the Tsubame supercomputer\footnote{\url{http://tsubame.gsic.titech.ac.jp/}} on a node with an Intel Xeon X5670 CPU, 54~GB RAM, and an nVidia Tesla K20Xm GPU, running Linux \texttt{3.0.76-0.11-default x86\_64} and CUDA 7.0.27.
+
+We simulated 1,000,000 iterations of a random street network with 500 streets and random vertex out-degrees between 1 and 10, 4096 cars, and 16384 pedestrians. All benchmark running times are average values of 5 runs\footnote{Running times showed a very low standard deviation.} using the same random scenario.
 
 \paragraph{Kernel Execution}
-Benchmark with/without job reordering and with/without columnar object layout (4 benchmarks)
+Figure~\ref{fig:bench_kernel} shows the kernel runtime of the traffic simulation in various configurations. Figure~\ref{fig:bench_kernel}a shows the runtime with a columnar object layout, which is around 30\% faster than the row-based layout in Figure~\ref{fig:bench_kernel}b.
+
+\begin{figure}[!htp]
+    \includegraphics[width=\columnwidth]{bench_1.pdf}
+    \centering
+    \caption{Kernel Runtime for Traffic Simulation}
+    \label{fig:bench_kernel}
+\end{figure}
+
+The objects involved in this example are quite small. Actors are represented by 32-byte structs (three instance variables and class tag) in row-based layout, or three 4-byte columns (class tag is passed as an argument) in a columnar layout, respectively. The GPU's L1 cache is 48~KB, with a cache line size of 128~bytes. To analyze the effect of caching, we ran the row-based benchmark with artificially enlarged object sizes (10/5 additional instance variables for actors/streets, resulting in an object size of 72~bytes/32~bytes, respectively; Figure~\ref{fig:bench_kernel}c). This configuration is interesting because the example code accesses all instance variables of an actor subsequently, diminishing the advantage of a column-based layout, because the entire object (and three subsequent objects) can be held in cache. A columnar object layout is around 60\% faster compared to this configuration.
 
 \paragraph{Job Reordering}
 Benchmark how long it takes to reorder jobs (2 dimensions: number of items, number of different types)

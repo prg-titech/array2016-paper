@@ -1,4 +1,4 @@
-#define REORDER 0
+#define REORDER 1
 
 #define GOOD_WEATHER 0
 #define BAD_WEATHER 1
@@ -72,6 +72,18 @@ typedef struct
 	int street;
 	float max_velocity;
 	int tag;
+
+	int a1;
+	int a2;
+	int a3;
+	int a4;
+	int a5;
+	int a6;
+	int a7;
+	int a8;
+	int a9;
+	int a10;
+	// TODO: add more fields here to avoid cache locality
 } struct_Actor;
 
 typedef struct
@@ -79,6 +91,12 @@ typedef struct
 	float length;
 	float max_velocity;
 	int neighbor_array_index;
+
+	int s1;
+	int s2;
+	int s3;
+	int s4;
+	int s5;
 } struct_Street;
 
 typedef struct

@@ -246,7 +246,7 @@ int main()
 	int *randomn = new int[NUM_STREETS];
 	for (int i = 0; i < NUM_STREETS; i++)
 	{
-		randomn[i] = i; 
+		randomn[i] = rand() % NUM_STREETS; 
 	}
 
 	printf("Scenario set up.\n");
