@@ -271,7 +271,7 @@ The job reordering array can be computed in linear time by scanning all elements
 \label{CHalgorithm}
 \begin{algorithmic}[1]
 \Procedure{ReorderingArray}{base, W}
-\State $\mathit{types} \gets$ Hash.new
+\State $\mathit{types} \gets$ Hash.new \hfill \textit{\textcolor{gray}{default value: \texttt{Array.new}}}
 \ForAll {$(\mathit{el}, \mathit{idx}) \in \mathit{base}$}
     \State $\mathit{types}[\mathit{el}.\mbox{class}].\mbox{add}(\mathit{idx})$
 \EndFor
@@ -402,7 +402,7 @@ The object tracer is responsible for generating a list of object that must be tr
 \section{Microbenchmarks}
 To evaluate our optimizations, we conducted a series of microbenchmarks using the traffic simulation example\footnote{\texttt{git@github.com:matthias-springer/array2016-paper.git}}. We ran benchmarks on the Tsubame supercomputer\footnote{\url{http://tsubame.gsic.titech.ac.jp/}} on a node with an Intel Xeon X5670 CPU, 54~GB RAM, and an nVidia Tesla K20Xm GPU, running Linux \texttt{3.0.76-0.11-default x86\_64} and CUDA 7.0.27.
 
-We simulated 1,000,000 iterations of a random street network with 500 streets and random vertex out-degrees between 1 and 10, 4096 cars, and 16384 pedestrians. All benchmark running times are average values of 5 runs\footnote{Running times showed a very low standard deviation.} using the same random scenario.
+We simulated 1,000,000 iterations of a random street network with 500 streets and random vertex out-degrees between 1 and 10, 4096 cars, and 16384 pedestrians. All benchmark running times are average values of 5 runs\footnote{GPU running times showed a very low standard deviation.} using the same random scenario.
 
 \paragraph{Kernel Execution}
 Figure~\ref{fig:bench_kernel} shows the kernel runtime of the traffic simulation in various configurations. Figure~\ref{fig:bench_kernel}a shows the runtime with a columnar object layout, which is around 30\% faster than the row-based layout in Figure~\ref{fig:bench_kernel}b.
@@ -417,7 +417,14 @@ Figure~\ref{fig:bench_kernel} shows the kernel runtime of the traffic simulation
 The objects involved in this example are quite small. Actors are represented by 32-byte structs (three instance variables and class tag) in row-based layout, or three 4-byte columns (class tag is passed as an argument) in a columnar layout, respectively. The GPU's L1 cache is 48~KB, with a cache line size of 128~bytes. To analyze the effect of caching, we ran the row-based benchmark with artificially enlarged object sizes (10/5 additional instance variables for actors/streets, resulting in an object size of 72~bytes/32~bytes, respectively; Figure~\ref{fig:bench_kernel}c). This configuration is interesting because the example code accesses all instance variables of an actor subsequently, diminishing the advantage of a column-based layout, because the entire object (and three subsequent objects) can be held in cache. A columnar object layout is around 60\% faster compared to this configuration.
 
 \paragraph{Job Reordering}
-Benchmark how long it takes to reorder jobs (2 dimensions: number of items, number of different types)
+Figure~\ref{fig:job_reorder_arr} shows the runtime for generating the job reordering array (warp size 32). This is currently done in the Ruby interpreter but could be moved to the GPU side in future versions. The runtime increases linearly with the number of elements in the base array. Changing the number of types (classes) has only a small effect on the runtime. We assume that this number is much smaller than the number of elements. For the traffic simuation example, the runtime for generating the job reordering array is neglectable.
+
+\begin{figure}[!htp]
+    \includegraphics[width=\columnwidth]{plot_reorder.pdf}
+    \centering
+    \caption{Runtime for Generating Job Reordering Array (Ruby)}
+    \label{fig:job_reorder_arr}
+\end{figure}
 
 \paragraph{Object Tracer}
 Benchmark how long it takes to trace a directed graph in adjacency list representation (2 dimensions: number of nodes, avg. vertex degree)
