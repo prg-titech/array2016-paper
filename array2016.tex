@@ -190,7 +190,7 @@ A simple actor-based traffic simulation will serve as a running example in this 
     \label{fig:running_example}%
 \end{figure}
 
-A car moves at a constant speed of $\min(M_c, M_s)$, where $M_c$ is the maximum velocity of the car and $M_s$ is the maximum speed allowed on the current street. A predestrian moves at a random speed between $-2$~mph and $4$~mph, i.e., a pedestrian can make negative progress. This is how we model strolling pedestrains. Furthermore, depending on their type, the progress of actors might be affected by weather conditions. For example, cars slow down if the weather conditions are bad, whereas pedestrians are not affected by weather.
+A car moves at a constant speed of $\min(M_c, M_s)$, where $M_c$ is the maximum velocity of the car and $M_s$ is the maximum speed allowed on the current street. A pedestrian moves at a random speed between $-2$~mph and $4$~mph, i.e., a pedestrian can make negative progress. This is how we model strolling pedestrians. Furthermore, depending on their type, the progress of actors might be affected by weather conditions. For example, cars slow down if the weather conditions are bad, whereas pedestrians are not affected by weather.
 
 \paragraph{Data Structure}
 The street network and the actors are designed in an object-oriented way. Figure~\ref{fig:running_example_classes} shows the class organization of the traffic simulation. \texttt{Car} and \texttt{Pedestrian} are subclasses of \texttt{Actor} and provide their own \texttt{move} methods which will be invoked for every tick of the simulation. 
@@ -248,7 +248,7 @@ In this section, we give an overview of some interesting aspects of Ikra's imple
 Before kernel invocation, Ikra analyzes all elements in the base array and reorders them according to their type. This is useful to avoid \emph{thread divergence}, which can penalize performance when running programs on GPUs.
 
 \paragraph{Thread Divergence}
-In contrast to most CPU-based systems\footnote{There are CPU extensions for SIMD computations, e.g., SSE.}, GPU-based systems are SIMD (single instruction, multiple data) systems. A GPU consists of a number of streaming multiprocessors. Such a processor has a single control unit that fetches and decodes instructions, but multiple arithmetic logic units (ALUs). Therefore, every instruction is executed in parallel on multiple chunks of data. Every ALU corresponds to one thread, but all threads that are executing on the same streaming multiprocessor must follow the same control flow. In case two threads take a different branch, their execution is serialized until the control flow merges again. Consequently, jobs should be threads/jobs should be mapped to streaming multiprocessors in such a way that the control flow is unlikely to divergenge among one such thread group (threads executing on one streaming multiprocessor).
+In contrast to most CPU-based systems\footnote{There are CPU extensions for SIMD computations, e.g., SSE.}, GPU-based systems are SIMD (single instruction, multiple data) systems. A GPU consists of a number of streaming multiprocessors. Such a processor has a single control unit that fetches and decodes instructions, but multiple arithmetic logic units (ALUs). Therefore, every instruction is executed in parallel on multiple chunks of data. Every ALU corresponds to one thread, but all threads that are executing on the same streaming multiprocessor must follow the same control flow. In case two threads take a different branch, their execution is serialized until the control flow merges again. Consequently, jobs should be threads/jobs should be mapped to streaming multiprocessors in such a way that the control flow is unlikely to divergence among one such thread group (threads executing on one streaming multiprocessor).
 
 In CUDA, such a thread group is called \emph{warp} and has a size of 32. There is no explicit interface to allocate threads to warps, but CUDA programmers try to write their programs in such a way that each consecutive group of 32 threads follows the same control flow.
 
@@ -271,7 +271,7 @@ The job reordering array can be computed in linear time by scanning all elements
 \label{CHalgorithm}
 \begin{algorithmic}[1]
 \Procedure{ReorderingArray}{base, W}
-\State $\mathit{types} \gets$ Hash.new \hfill \textit{\textcolor{gray}{default value: \texttt{Array.new}}}
+\State $\mathit{types} \gets$ Hash.new \hfill \textcolor{gray}{\textit{default value:} Array.new}
 \ForAll {$(\mathit{el}, \mathit{idx}) \in \mathit{base}$}
     \State $\mathit{types}[\mathit{el}.\mbox{class}].\mbox{add}(\mathit{idx})$
 \EndFor
@@ -315,9 +315,12 @@ After running the object tracer, we know which objects should be transferred to 
     \item Group objects by their classes $c$, resulting in arrays $O_c$.
     \item Assign an ID to every object for all $O_c$, starting from $0$ in every $O_c$, IDs being consecutive. This results in a hash map $H_c$ mapping objects to class-specific IDs.
     \item For every instance variable $v$ of every class $c$, create an array (column) $A_{c,v}$ of size $m + 1$, where $m$ is the maximum ID in $O_c$. The base type of the array is the type of the instance variable if it is primitive, or \texttt{int} otherwise (referencing other non-primitive objects via their IDs).
-    \item Traverse the object graph. For every visited object $o$ , determine its class $c$ and ID $H_c[o]$. Store every instance variable $v$ in the corresponding column slot $A_{c, v}[H_c[o]]$. If the instance variable is non-primitive, look up its ID and store it.
+    \item For every object $o$ with class $c$ and ID $H_c[o]$, store every instance variable $v$ in the corresponding column slot $A_{c, v}[H_c[o]]$. If the instance variable is non-primitive, look up its ID and store it.
 \end{enumerate}
+
 Note that after this transformation, the base type of the base array that is passed to the kernel, is \texttt{int} and contains object IDs if it contains non-primitive objects.
+
+In our implementation, the object tracer is combined with the column generator. A pseudo code implementation which was also used for benchmarks is shown in Section~\ref{sec:appendix_obj_tracer}.
 
 \paragraph{Source Code Transformation}
 Since objects are now represented as fields of arrays, Ikra must generate different source code for reading from or writing to instance variables. We continue to assume that the type of all expressions and variables is known unambiguously. Moreover, we do not consider generating new objects at this time (see Section~\ref{sec:gen_new_obj}).
@@ -351,7 +354,7 @@ In contrast to CUDA, Ruby is a dynamically-typed programming language. One of th
 Ikra embeds dynamic types into CUDA's static type system by generating explicit type dispatch statements at method call sites based on type tags~\cite{Abadi:1989:DTS:75277.75296} for receivers whose types cannot be inferred unambiguously. From a perspective of object-oriented design, this looks as if every object has a \emph{type} instance variable.
 
 \paragraph{Class Tags}
-To support dynamically-typed expressions, we extend the idea of class-specific object IDs as follows. The following mechansim is applied only if the type of an expression or variable cannot be uniquely inferred. Otherwise, the previously described (non-extended) mechanism is applied. 
+To support dynamically-typed expressions, we extend the idea of class-specific object IDs as follows. The following mechanism is applied only if the type of an expression or variable cannot be uniquely inferred. Otherwise, the previously described (non-extended) mechanism is applied. 
 
 Whenever an object ID was previously used, we now use a tuple of object ID and \emph{class tag}. A class tag is a unique \texttt{int} identifier for a certain class. Class tags are used for object references and for method calls. A Ruby variable is now represented by two CUDA \texttt{int} variables: one for the class tag and one for the object ID. Similarly, when passing an object as an argument, the same two arguments are passed in the generated CUDA code.
 
@@ -378,7 +381,7 @@ Before dispatching to a method, the generated CUDA code determines the type of t
         method_Pedestrian_move(actor_id, weather);
         <@\textbf{break}@>;
       <@\textbf{default}@>:
-        <@\textit{/* same mechansim to dispatch to method\_missing */}@>
+        <@\textit{/* same mechanism to dispatch to method\_missing */}@>
     }
   }
 }
@@ -442,7 +445,7 @@ The runtime for transferring columns to the GPU and generating the CUDA code is 
 \section{Related Work}
 Columnar data layouts are known to be superior compared to row-based data layouts for certain kinds of database queries (e.g., OLAP queries)~\cite{Plattner:2009:CDA:1559845.1559846}, and especially for GPU-powered databases~\cite{Bakkum:2010:ASD:1735688.1735706}. In fact, one of the benefits of column stores for CPU-based database systems is \emph{prefetching}, which is similar to coalescing on GPUs, but without the parallel aspect. Columnar data layouts have also been evaluated for object-oriented programming languages. Mattis et al. have implemented a columnar object layout in Pypy to increase the performance of analytical queries~\cite{Mattis:2015:COI:2814228.2814230}. Ikra essentially uses the same columnar object layout, but extended to polymorphic types.
 
-A number of different techniques exist for avoiding thread divergence, e.g., detecting and delaying divergent branches at runtime in order to execute them at a later time, or factoring out instructions that are common to two (divergent) branches~\cite{Han:2011:RBD:1964179.1964184}. A different approach is to reorder jobs, either with a reordering array (which is what Ikra does) or by physically changing the order of the jobs in the base array. Both techinques can be combined to increase memory coalescing~\cite{Zhang:2011:OED:1950365.1950408} (physically reordering data, then using a reordering array to restore the original semantics), but detailed knowledge about memory access patterns is required. Previous work has also investigated how the overhead of these transformations can be hidden using a CPU-GPU pipelining scheme~\cite{Zhang:2010:SGA:1810085.1810104}, if done at runtime in order to react to changes.
+A number of different techniques exist for avoiding thread divergence, e.g., detecting and delaying divergent branches at runtime in order to execute them at a later time, or factoring out instructions that are common to two (divergent) branches~\cite{Han:2011:RBD:1964179.1964184}. A different approach is to reorder jobs, either with a reordering array (which is what Ikra does) or by physically changing the order of the jobs in the base array. Both techniques can be combined to increase memory coalescing~\cite{Zhang:2011:OED:1950365.1950408} (physically reordering data, then using a reordering array to restore the original semantics), but detailed knowledge about memory access patterns is required. Previous work has also investigated how the overhead of these transformations can be hidden using a CPU-GPU pipelining scheme~\cite{Zhang:2010:SGA:1810085.1810104}, if done at runtime in order to react to changes.
 
 Ishizaki et al. presented a framework for executing lambda expression used with the parallel streams API in Java~8 programs on nVidia GPUs~\cite{ishizaki2015compiling}. Their approach is to generate LLVM intermediate code (IR) from Java bytecode, which is in our opinion superior to Ikra's approach of performing a Ruby-to-CUDA source-code-to-source-code transformation from an engineering point of view. Future versions of Ikra might generate LLVM IR code from YARV bytecode~\cite{Sasada:2005:YYR:1094855.1094912}. Further optimizations of their Java~8 compiler include a check for array aliasing (which is what Ikra's object tracer does implicitly) and utilizing a read-only cache. Their implementation supports virtual method calls using direct devirtualization if the receiver type can be uniquely determined at compile time, or guarded devirtualization, executing an iteration on the GPU if the guard fails; in either case, the GPU code must only be able to handle monomorphic method calls. Ikra's code generator applies direct devirtualization, i.e., it does not generate type dispatch statements if the receiver type can be inferred unambiguously. Otherwise, it generates CUDA code that dispatches to the correct method based on class tags.
 
@@ -464,6 +467,8 @@ Ikra's capabilities to modify data inside a parallel section are still limited, 
 For example, new objects can be created only on the Ruby side, but not inside parallel sections. This is because instance variable columns must be increased when adding new objects. However, increasing their size might require moving them to a different place in the global memory, which is expensive.
 
 As another example, it is currently not possible to add or remove elements from an array\footnote{Changing an element is allowed.}. Future versions of Ikra might store arrays separately instead of using a single big array (Figure~\ref{fig:array_repr}). Instead of storing an offset, this would require storing a pointer.
+
+\balance
 
 \subsection{Nested Loops}
 \label{sec:nested_loops}
@@ -492,7 +497,7 @@ Nesting two parallel \texttt{peach} statements within each other is not supporte
 \subsection{Performance Optimizations}
 Further ideas for performance optimizations include taking advantage of shared memory, which is much faster than global memory. However, it is not obvious what kind of data to store in shared memory because of its limited size.
 
-Ikra's columnar object layout is similar to the data layout of column databases. Future work might investigate to what degree optimizations in the area of column databases~\cite{DBLP:journals/ftdb/AbadiBHIM13, DBLP:journals/corr/LinMPS16} are applicable to a column-based object graph. Data compression mechansims for minimizing data transfer time look particularly promising, given the performance gap between global memory and shared memory, and have been subject to previous work in GPU computing~\cite{Patel:2012:PLD, Przymus2012}.
+Ikra's columnar object layout is similar to the data layout of column databases. Future work might investigate to what degree optimizations in the area of column databases~\cite{DBLP:journals/ftdb/AbadiBHIM13, DBLP:journals/corr/LinMPS16} are applicable to a column-based object graph. Data compression mechanisms for minimizing data transfer time look particularly promising, given the performance gap between global memory and shared memory, and have been subject to previous work in GPU computing~\cite{Patel:2012:PLD, Przymus2012}.
 
 % Only write back objects if they are accessed; how can we hook into object access? Proxies?
 
@@ -501,9 +506,62 @@ We presented Ikra, a just-in-time Ruby-to-CUDA compiler for array-based parallel
 
 % We recommend abbrvnat bibliography style.
 
-\balance
+\appendix
+\section{Appendix: Object Tracer}
+In the following pseudo code for tracing objects and generating columns, $\mathit{base}$ and $\mathit{lexical}$ are object tracer roots, and $\mathit{IV}$ is a map of read/written instance variables per class (type inference).
+
+\label{sec:appendix_obj_tracer}
+\begin{algorithm}
+\caption{Object Tracing and Column Generation}
+\label{CHalgorithm}
+\begin{algorithmic}[1]
+\Procedure{TraceAndColumnize}{base, lexical, IV}
+\State $\mathit{Q} \gets \mathit{base} \cup \mathit{lexical}$
+\State $H \gets \mbox{Hash.new}$ \hfill \textcolor{gray}{\textit{default value:} Hash.new}
+\State $M \gets \mbox{Hash.new}$ \hfill \textcolor{gray}{\textit{default value:} 0}
+\While{$|Q| > 0$}
+    \State $\mathit{next} \gets H.\mbox{pop}()$
+    \State $c \gets \mathit{next}.\mbox{class}$
+    \If{$\neg c.\mbox{isPrimitive} \wedge \mathit{next} \not\in H[c].\mathit{keys}$}
+        \State $\mathit{id} \gets M[c]$
+        \State $M[c] \gets M[c] + 1$
+
+        \If{$c == \mbox{Array}$}
+            \ForAll{$e \in \mathit{next}$}
+                \State $Q.\mbox{push}(e)$
+            \EndFor
+        \Else
+            \ForAll{$v \in \mathit{IV}[c]$}
+                \State $Q.\mbox{push}(\mathit{next}[v])$
+            \EndFor
+        \EndIf
+    \EndIf
+\EndWhile
+
+\ForAll{$c \in H.\mbox{keys}$}
+    \ForAll{$v \in \mathit{IV}[c]$}
+        \State $A_{c,v} \gets \mbox{Array.new}(M[c])$ \hfill \textcolor{gray}{\textit{(Array case ommitted)}}
+    \EndFor
+
+    \ForAll{$(\mathit{obj}, \mathit{id}) \in H[c]$}
+        \ForAll{$v \in \mathit{IV}[c]$}
+            \If{$\mathit{obj}[v].\mbox{class}.\mbox{isPrimitive}$}
+                \State $A_{c,v}[\mathit{id}] \gets \mathit{obj}[v]$
+            \ElsIf{$\mathit{obj}[v].\mbox{class} == \mbox{Array}$}
+                \State $A_{c, \mathit{size}}[\mathit{id}] \gets |\mathit{obj}|$
+                \State $A_{c, \mathit{ofs}}[\mathit{id}] \gets A_{c, \mathit{ofs}}[\mathit{id} - 1] + A_{c, \mathit{size}}[\mathit{id} - 1]$
+                \State $\mbox{\textcolor{gray}{\textit{(copy over array into slots $[\mathit{ofs}$; $\mathit{ofs} + \mathit{size}[$)}}}$
+            \Else
+                \State $A_{c,v}[\mathit{id}] \gets H[\mathit{obj}[v].\mbox{class}][\mathit{obj}[v]]$
+            \EndIf
+        \EndFor
+    \EndFor
+\EndFor
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
 \bibliographystyle{plain}
 \bibliography{array2016}
-
 
 \end{document}
