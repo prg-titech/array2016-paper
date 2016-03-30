@@ -409,38 +409,38 @@ To evaluate our optimizations, we conducted a series of microbenchmarks using th
 We simulated 1,000,000 iterations of a random street network with 500 streets and random vertex out-degrees between 1 and 10, 4096 cars, and 16384 pedestrians. All benchmark running times are average values of 5 runs\footnote{GPU running times showed a very low standard deviation.} using the same random scenario.
 
 \paragraph{Kernel Execution}
-Figure~\ref{fig:bench_kernel} shows the kernel runtime of the traffic simulation in various configurations. Figure~\ref{fig:bench_kernel}a shows the runtime with a columnar object layout, which is around 30\% faster than the row-based layout in Figure~\ref{fig:bench_kernel}b.
+Figure~\ref{fig:bench_kernel} shows the kernel running time of the traffic simulation in various configurations. Figure~\ref{fig:bench_kernel}a shows the running time with a columnar object layout, which is around 30\% faster than the row-based layout in Figure~\ref{fig:bench_kernel}b.
 
 \begin{figure}[!htp]
     \includegraphics[width=0.95\columnwidth]{bench_1.pdf}
     \centering
-    \caption{Kernel Runtime for Traffic Simulation (CUDA)}
+    \caption{Kernel Running Time for Traffic Simulation (CUDA)}
     \label{fig:bench_kernel}
 \end{figure}
 
 The objects involved in this example are quite small. Actors are represented by 32-byte structs (three instance variables and class tag) in row-based layout, or three 4-byte columns (class tag is passed as an argument) in a columnar layout, respectively. The GPU's L1 cache is 48~KB, with a cache line size of 128~bytes. To analyze the effect of caching, we ran the row-based benchmark with artificially enlarged object sizes (10/5 additional instance variables for actors/streets, resulting in an object size of 72~bytes/32~bytes, respectively; Figure~\ref{fig:bench_kernel}c). This configuration is interesting because the example code accesses all instance variables of an actor subsequently, diminishing the advantage of a column-based layout, because the entire object (and three subsequent objects) can be held in cache (prefetching). A columnar object layout is around 60\% faster compared to this configuration.
 
 \paragraph{Job Reordering}
-Figure~\ref{fig:job_reorder_arr} shows the runtime of generating the job reordering array (warp size 32). This is currently done in the Ruby interpreter but could be moved to the GPU side in future versions. The runtime increases linearly with the number of elements in the base array. Changing the number of types (classes) has only a small effect on the runtime. We assume that this number is much smaller than the number of elements. For the traffic simulation example, the runtime for generating the job reordering array is neglectable.
+Figure~\ref{fig:job_reorder_arr} shows the running time for generating the job reordering array (warp size 32). This is currently done in the Ruby interpreter but could be moved to the GPU side in future versions. The running time increases linearly with the number of elements in the base array. Changing the number of types (classes) has only a small effect on the running time. We assume that this number is much smaller than the number of elements. For the traffic simulation example, the running time for generating the job reordering array is neglectable.
 
 \begin{figure}[!htp]
     \includegraphics[width=0.9\columnwidth]{plot_reorder.pdf}
     \centering
-    \caption{Runtime for Generating Job Reordering Array (Ruby)}
+    \caption{Running Time for Generating Job Reordering Array (Ruby)}
     \label{fig:job_reorder_arr}
 \end{figure}
 
 \paragraph{Tracing Object and Generating Columns}
-Figure~\ref{fig:tracing} shows the runtime of tracing objects and generating columns for the traffic simulation example. For the number of actors/streets that were used in the kernel benchmarks, the runtime is neglectable. Moreover, in future plans for Ikra we want to perform this step only once and reuse data that was already processed and moved to the GPU earlier (see Section~\ref{sec:minimizing_dtr}).
+Figure~\ref{fig:tracing} shows the running time for tracing objects and generating columns (Algorithm~2) for the traffic simulation example. For the number of actors/streets that were used in the kernel benchmarks, the running time is neglectable. Moreover, in future plans for Ikra we want to perform this step only once and reuse data that was already processed and moved to the GPU earlier (see Section~\ref{sec:minimizing_dtr}).
 
 \begin{figure}[!htp]
     \includegraphics[width=\columnwidth]{obj_tracer.pdf}
     \centering
-    \caption{Runtime for Tracing Objects and Generating Columns (Ruby)}
+    \caption{Running Time for Tracing Objects and Generating Columns (Ruby)}
     \label{fig:tracing}
 \end{figure}
 
-The runtime for transferring columns to the GPU and generating the CUDA code is not included in these benchmarks.
+The running time for transferring columns to the GPU and generating the CUDA code is not included in these benchmarks.
 
 \section{Related Work}
 Columnar data layouts are known to be superior compared to row-based data layouts for certain kinds of database queries (e.g., OLAP queries)~\cite{Plattner:2009:CDA:1559845.1559846}, and especially for GPU-powered databases~\cite{Bakkum:2010:ASD:1735688.1735706}. In fact, one of the benefits of column stores for CPU-based database systems is \emph{prefetching}, which is similar to coalescing on GPUs, but without the parallel aspect. Columnar data layouts have also been evaluated for object-oriented programming languages. Mattis et al. have implemented a columnar object layout in Pypy to increase the performance of analytical queries~\cite{Mattis:2015:COI:2814228.2814230}. Ikra essentially uses the same columnar object layout, but extended to polymorphic types.
@@ -516,16 +516,15 @@ In the following pseudo code for tracing objects and generating columns, $\mathi
 \label{CHalgorithm}
 \begin{algorithmic}[1]
 \Procedure{TraceAndColumnize}{base, lexical, IV}
-\State $\mathit{Q} \gets \mathit{base} \cup \mathit{lexical}$
+\State $\mathit{Q} \gets \mbox{Queue.new}(\mathit{base} \cup \mathit{lexical})$
 \State $H \gets \mbox{Hash.new}$ \hfill \textcolor{gray}{\textit{default value:} Hash.new}
 \State $M \gets \mbox{Hash.new}$ \hfill \textcolor{gray}{\textit{default value:} 0}
 \While{$|Q| > 0$}
-    \State $\mathit{next} \gets H.\mbox{pop}()$
+    \State $\mathit{next} \gets Q.\mbox{pop}()$
     \State $c \gets \mathit{next}.\mbox{class}$
     \If{$\neg c.\mbox{isPrimitive} \wedge \mathit{next} \not\in H[c].\mathit{keys}$}
-        \State $\mathit{id} \gets M[c]$
+        \State $H[\mathit{next}] \gets M[c]$
         \State $M[c] \gets M[c] + 1$
-
         \If{$c == \mbox{Array}$}
             \ForAll{$e \in \mathit{next}$}
                 \State $Q.\mbox{push}(e)$
