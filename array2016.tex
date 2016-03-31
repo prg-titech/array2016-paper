@@ -137,9 +137,9 @@ escapechar=`,
 \toappear{}
 
 \titlebanner{Submitted for review to ARRAY 2016}        % These are ignored unless
-\preprintfooter{Ikra: Object-oriented GPGPU Programming in Ruby with CUDA}   % 'preprint' option specified.
+\preprintfooter{Object Support in an Array-based GPGPU Extension for Ruby}   % 'preprint' option specified.
 
-\title{Ikra: Object-oriented GPGPU Programming \\ in Ruby with CUDA}
+\title{Object Support in an Array-based GPGPU Extension for Ruby}
 %\title{A Layer-based Approach to Hierarchical Dynamically-scoped Class Extensions}
 
 \subtitle{Research Paper}
@@ -155,11 +155,11 @@ escapechar=`,
 \captionsetup{labelfont=bf}
 
 \begin{abstract}
-This paper presents implementation and optimization techniques to support objects in Ikra, an array-based parallel extension to Ruby with a just-in-time compiler. The high-level goal of Ikra is to allow developers to exploit GPU-based high-performance computing without having to be familiar with intricate details of the underlying GPU infrastructure and CUDA.
+This paper presents implementation and optimization techniques to support objects in Ikra, an array-based parallel extension to Ruby with dynamic compilation. The high-level goal of Ikra is to allow developers to exploit GPU-based high-performance computing without paying much attention to intricate details of the underlying GPU infrastructure and CUDA.
 
-Ikra supports dynamically-typed object-oriented programming in Ruby and performs a number of optimizations. To reduce thread divergence, Ikra reorders jobs in the base array based on type information. To facilitate memory coalescing, Ikra stores objects in a fields-of-arrays representation (columnar object layout). To support a larger subset of Ruby, polymorphic method calls are allowed in parallel sections and compiled to conditional branches. Cascaded parallel sections can be arbitrarily interleaved with non-parallel sections, are executed symbolically, and are merged into one kernel and executed upon accessing the result.
+Ikra supports dynamically-typed object-oriented programming in Ruby and performs a number of optimizations. It supports parallel operations (e.g., map, each) on arrays of polymorphic objects, allowing polymorphic method calls inside a kernel by compiling them to conditional branches. To reduce branch divergence, Ikra shuffles thread assignments to base array elements based on runtime types of elements. To facilitate memory coalescing, Ikra stores objects in a fields-of-arrays representation (columnar object layout). To eliminate intermediate data in global memory, Ikra merges cascaded parallel sections into one kernel using symbolic execution.
 
-%Ikra analyzes parallel sections in the form of array operations (e.g., \texttt{map}, \texttt{select}, or \texttt{each}), performs type inference upon invocation, and generates a CUDA kernel. To reduce thread divergence, Ikra reorders the base array based on the type information, which is useful for programs that were designed in an object-oriented way. Objects are represented as columns, giving rise to memory coalescing. Although programmers are advised to write statically-typed Ruby code for performance reasons, Ikra can generate CUDA code for expressions that can be one of multiple types using class tags.
+%Ikra analyzes parallel sections in the form of array operations (e.g., \texttt{map}, \texttt{select}, or \texttt{each}), performs type inference upon invocation, and generates a CUDA kernel. To reduce branch divergence, Ikra reorders the base array based on the type information, which is useful for programs that were designed in an object-oriented way. Objects are represented as columns, giving rise to memory coalescing. Although programmers are advised to write statically-typed Ruby code for performance reasons, Ikra can generate CUDA code for expressions that can be one of multiple types using class tags.
 \end{abstract}
 
 \category{D.1.3}{Concurrent Programming}{Parallel Programming}
@@ -176,10 +176,10 @@ GPGPU, CUDA, Ruby, object-oriented programming
 \section{Introduction}
 With the availability and affordability of powerful GPUs, general purpose computing on graphics processing units (GPGPU) is becoming more and more popular in high-performance computing. Nowadays, many supercomputers rely on GPUs as main processing units, because they allow for massively parallel execution of algorithms or simulations with thousands of threads per GPU. However, GPU programming differs from traditional CPU programming, mostly because of architectural differences.
 
-The goal of the Ikra project is to make GPU programming available to researchers who are not familiar with the details of GPUs and their programming languages. Ikra is a library for Ruby that translates parallel sections to CUDA code and executes them in parallel on GPUs. It extends our previous work~\cite{Masuhara:2012:DER:2237887.2237888} with a just-in-time approach to allow for a larger number of optimizations and tighter integration with Ruby. We target the Ruby programming language because it provides powerful mechanisms for embedding DSLs in the language, which will be useful for later experiments.
+The goal of the Ikra project is to make GPU programming available to developers who are not familiar with the details of GPUs and their programming languages. Ikra is a library for Ruby that translates parallel sections to CUDA code and executes them in parallel on GPUs. It extends our previous work~\cite{Masuhara:2012:DER:2237887.2237888} with a dynamic compilation approach to allow for a larger number of optimizations and tighter integration with Ruby. We target the Ruby programming language because it provides powerful mechanisms for embedding DSLs in the language, which will be useful for future work.
 
-\section{Example: Actor-based Traffic Simulation}
-A simple actor-based traffic simulation will serve as a running example in this paper. The basic idea is to simulate the behavior of a number of actors~\cite{Helbing2012} (e.g., cars, buses, pedestrians, etc.), given a street network as a directed graph (Figure~\ref{fig:running_example}) in adjacency list representation. Every actor is located on one street. Every street has a \emph{length} attribute and every actor has a \emph{progress} attribute representing the distance from the beginning of the street. Once these two attributes have the same value, the actor reached an intersection and should be moved to a different street (or make a U-turn if there is no other neighboring street).
+\section{Example: Agent-based Traffic Simulation}
+A simple object-oriented agent-based traffic simulation will serve as a running example in this paper. The basic idea is to simulate the behavior of a number of agents~\cite{Helbing2012} (e.g., cars, buses, pedestrians, etc.), given a street network as a directed graph (Figure~\ref{fig:running_example}) in adjacency list representation. Every agent is located on one street. Every street has a \emph{length} attribute and every agent has a \emph{progress} attribute representing the distance from the beginning of the street. Once these two attributes have the same value, the agent reached an intersection and should be moved to a different street (or make a U-turn if there is no other neighboring street).
 
 \begin{figure}[!htp]
     \centering
@@ -190,10 +190,10 @@ A simple actor-based traffic simulation will serve as a running example in this 
     \label{fig:running_example}%
 \end{figure}
 
-A car moves at a constant speed of $\min(M_c, M_s)$, where $M_c$ is the maximum velocity of the car and $M_s$ is the maximum speed allowed on the current street. A pedestrian moves at a random speed between $-2$~mph and $4$~mph, i.e., a pedestrian can make negative progress. This is how we model strolling pedestrians. Furthermore, depending on their type, the progress of actors might be affected by weather conditions. For example, cars slow down if the weather conditions are bad, whereas pedestrians are not affected by weather.
+A car moves at a constant speed of $\min(M_c, M_s)$, where $M_c$ is the maximum velocity of the car and $M_s$ is the maximum speed allowed on the current street. A pedestrian moves at a random speed between $-2$~mph and $4$~mph, i.e., a pedestrian can make negative progress. This is how we model strolling pedestrians. Furthermore, depending on their type, the progress of agents might be affected by weather conditions. For example, cars slow down if the weather conditions are bad, whereas pedestrians are not affected by weather.
 
 \paragraph{Data Structure}
-The street network and the actors are designed in an object-oriented way. Figure~\ref{fig:running_example_classes} shows the class organization of the traffic simulation. \texttt{Car} and \texttt{Pedestrian} are subclasses of \texttt{Actor} and provide their own \texttt{move} methods which will be invoked for every tick of the simulation. 
+The street network and the agents are designed in an object-oriented way. Figure~\ref{fig:running_example_classes} shows the class organization of the traffic simulation. \texttt{Car} and \texttt{Pedestrian} are subclasses of \texttt{Agent} and provide their own \texttt{move} methods which will be invoked for every tick of the simulation. 
 
 \begin{figure}[!htp]
     \centering
@@ -203,25 +203,25 @@ The street network and the actors are designed in an object-oriented way. Figure
 \end{figure}
 
 \paragraph{Main Simulation Loop}
-The following code snippet contains the main simulation functionality. The method \texttt{pmap} designates a parallel section. Its parameter \texttt{ticks} determines how often the entire \texttt{peach} statement should be executed and is equivalent to wrapping the \texttt{peach} statement in a loop that executes it \texttt{ticks} times\footnote{There are currently certain limitations for loop nesting. See Section~\ref{sec:nested_loops} for more details.}.
+The following code snippet contains the main simulation functionality. The method \texttt{peach} designates a parallel section. Its parameter \texttt{ticks} determines how often the entire \texttt{peach} statement should be executed and is equivalent to wrapping the \texttt{peach} statement in a loop that executes it \texttt{ticks} times\footnote{There are currently certain limitations for loop nesting. See Section~\ref{sec:nested_loops} for more details.}.
 
 \begin{lstlisting}
-actors = [...]
+agents = <@\textit{\# load scenario from file system}@>
 ticks = 1000
 weather = Weather::Rainy
 
-actors.peach(ticks) <@\textbf{do}@> |actor|
-    actor.move(weather)
+agents.peach(ticks) <@\textbf{do}@> |agent|
+    agent.move(weather)
 <@\textbf{end}@>
 \end{lstlisting}
 
-Every \emph{tick} of the simulation progresses the current time by a certain constant value and actors are required to update their progress and street attributes accordingly.
+Every \emph{tick} of the simulation progresses the current time by a certain constant value and agents are required to update their progress and street attributes accordingly.
 
 \section{Architecture}
-Ikra is a library for Ruby. It adds functionality to arrays to execute \texttt{map}, \texttt{select} and \texttt{each} operations in parallel. Programmers can \emph{require} Ikra in Ruby files, upon which new parallel versions of array operations are available (e.g., \texttt{pmap}). These parallel array operations take a block as an argument, designate the only parts of a Ruby programs that are parallelized using Ikra, and are executed symbolically. Parallel array operations (except for \texttt{peach}) can be cascaded and are executed only if the result is actually accessed. The default behavior is to spawn one thread per array element, which is why all these computations must be independent of each other. 
+Ikra is a library for Ruby. It adds functionality to arrays to execute \texttt{map}, \texttt{reduce}, \texttt{select} and \texttt{each} operations in parallel. Programmers can \emph{require} Ikra in Ruby files, upon which new parallel versions of array operations are available (e.g., \texttt{pmap}). These parallel array operations take a block as an argument, designate the only parts of a Ruby programs that are parallelized using Ikra.
 
 \subsection{Compilation Process}
-Figure~\ref{fig:overview_arch} gives a high-level overview of Ikra's compilation process. Upon invocation of a parallel section, Ikra acquires the source code of the parallel block, generates an abstract syntax tree (AST), and infers the type of all expressions. As a result, the type of every local and instance variable is known. In the best case, the type of an expression is monomorphic and primitive, but Ikra also supports arbitrary Ruby classes as types, as well as polymorphic types (see Section~\ref{sec:polymorphic}). The type inferer traverses invoked methods in a may-point-to fashion\footnote{Methods of all possible receiver types are taken into account.}. Based on the type-annotated AST, Ikra generates CUDA kernel code and boilerplate code for kernel invocation, and compiles the CUDA code using the nVidia CUDA toolchain. The result is a shared library which is loaded via Ruby's foreign function interface. Before kernel invocation, the base array and lexical variables along with all reachable objects (via instance variables) are transferred to the GPU's global memory. After kernel invocation, all changed objects and the result of the parallel section (if applicable) are written back to Ruby.
+Figure~\ref{fig:overview_arch} gives a high-level overview of Ikra's compilation process. Upon invocation of a parallel section, Ikra acquires the source code of the parallel block, generates an abstract syntax tree (AST), and infers the type of all expressions. As a result, the type of every local and instance variable is known. In the best case, the type of an expression is monomorphic and primitive, but Ikra also supports arbitrary Ruby classes as types, as well as polymorphic types (see Section~\ref{sec:polymorphic}). The type inferer traverses invoked method bodies for all possible receiver types (\emph{union type}). Based on the type-annotated AST, Ikra generates CUDA kernel code and initialization code for kernel invocation, and compiles the CUDA code using the nVidia CUDA toolchain. The result is a shared library which is loaded via Ruby's foreign function interface. Before kernel invocation, the base array and lexical variables along with all reachable objects (via instance variables) are transferred to the GPU's global memory. After kernel invocation, all changed objects and the result of the parallel section (if applicable) are written back to Ruby.
 
 \begin{figure}[!tp]
     \includegraphics[width=\columnwidth]{high_level_arch.pdf}
@@ -229,14 +229,12 @@ Figure~\ref{fig:overview_arch} gives a high-level overview of Ikra's compilation
     \label{fig:overview_arch}
 \end{figure}
 
-Ikra performs \emph{kernel fusion}~\cite{Wu:2012:KWA:2457472.2457490, Wahib:2014:SKF:2683593.2683615}, i.e., cascaded parallel operations are merged into a single CUDA kernel to avoid writing intermediate results to the global memory. Instead, they can be kept in registers. The process of merging two parallel blocks is not relevant in the scope of this paper and omitted.
-
 \subsection{Integration in Ruby}
-In contrast to some other projects, Ikra transforms Ruby code to CUDA code while the Ruby program is running (just-in-time compilation). Therefore, Ikra can determine the types of variables that are passed into parallel sections at runtime instead of doing a dataflow analysis of the entire program. This is not only faster but also more accurate in the light of reflection and metaprogramming, which is allowed outside of parallel sections but not inside them.
+Ikra transforms Ruby code to CUDA code at runtime when a parallel operation is invoked (dynamic compilation). Therefore, Ikra can determine the types of elements/variables that are passed into parallel sections at runtime instead of doing a dataflow analysis of the entire program. This is not only faster but also more robust in the light of reflection and metaprogramming, which is allowed outside of parallel sections but not inside them.
 
-Two different kinds of variables can be used inside a parallel section: iterator variables and lexical variables\footnote{Instance variables can be used when calling an instance method.}. In the main loop of the traffic simulation example, \texttt{actor} is an iterator variable and \texttt{weather} is a lexical variable. The types of these variables are used as the basis for type inference of the remaining parallel section.
+Two different kinds of variables can be used inside a parallel section: iterator variables and lexical variables\footnote{Instance variables can be used when calling an instance method.}. In the main loop of the traffic simulation example, \texttt{agent} is an iterator variable and \texttt{weather} is a lexical variable. The types of these variables are used as the basis for type inference of the remaining parallel section.
 
-Programmers can use not only primitive objects (\texttt{Fixnum}, \texttt{Float}, etc.) but also objects which are instances of Ruby classes inside parallel sections, allowing for object-oriented modelling of the problem (e.g., a traffic simulation). Consequently, a graph of \emph{reachable} (connected) objects must be transferred to the GPU. The \emph{object tracer} is responsible for determining which objects should be copied to the GPU's global memory (see Section~\ref{sec:impl_tracer}).
+Programmers can use not only primitive objects (\texttt{Fixnum}, \texttt{Float}, etc.) but also objects which are instances of Ruby classes inside parallel sections, allowing for object-oriented modeling of the problem (e.g., a traffic simulation). Consequently, a graph of \emph{reachable} (connected) objects must be transferred to the GPU. The \emph{object tracer} is responsible for determining which objects should be copied to the GPU's global memory (see Section~\ref{sec:impl_tracer}).
 
 After kernel execution, changed local variables and instance variables are copied back to the Ruby side (see Section~\ref{sec:impl_copyback}).
 
@@ -244,16 +242,21 @@ After kernel execution, changed local variables and instance variables are copie
 \section{Implementation and Optimizations}
 In this section, we give an overview of some interesting aspects of Ikra's implementation.
 
-\subsection{Job Reordering}
-Before kernel invocation, Ikra analyzes all elements in the base array and reorders them according to their type. This is useful to avoid \emph{thread divergence}, which can penalize performance when running programs on GPUs.
+\subsection{Symbolic Execution}
+Parallel array operations (except for \texttt{peach}) are executed symbolically in Ikra. They can be cascaded and are executed only if the result is actually accessed. The default behavior is to spawn one thread per array element, which is why all these computations must be independent of each other. 
 
-\paragraph{Thread Divergence}
+Ikra performs \emph{kernel fusion}~\cite{Wu:2012:KWA:2457472.2457490, Wahib:2014:SKF:2683593.2683615}, i.e., cascaded parallel operations are merged into a single CUDA kernel to avoid writing intermediate results to the global memory. Instead, they can be kept in registers. The process of merging two parallel blocks is not relevant in the scope of this paper and omitted.
+
+\subsection{Job Reordering}
+Before kernel invocation, Ikra analyzes all elements in the base array and reorders them according to their type. This is useful to avoid \emph{branch divergence}, which can penalize performance when running programs on GPUs.
+
+\paragraph{Branch Divergence}
 In contrast to most CPU-based systems\footnote{There are CPU extensions for SIMD computations, e.g., SSE.}, GPU-based systems are SIMD (single instruction, multiple data) systems. A GPU consists of a number of streaming multiprocessors. Such a processor has a single control unit that fetches and decodes instructions, but multiple arithmetic logic units (ALUs). Therefore, every instruction is executed in parallel on multiple chunks of data. Every ALU corresponds to one thread, but all threads that are executing on the same streaming multiprocessor must follow the same control flow. In case two threads take a different branch, their execution is serialized until the control flow merges again. Consequently, jobs should be threads/jobs should be mapped to streaming multiprocessors in such a way that the control flow is unlikely to divergence among one such thread group (threads executing on one streaming multiprocessor).
 
 In CUDA, such a thread group is called \emph{warp} and has a size of 32. There is no explicit interface to allocate threads to warps, but CUDA programmers try to write their programs in such a way that each consecutive group of 32 threads follows the same control flow.
 
 \paragraph{Thread Allocation}
-Ikra tries to avoid thread divergence by allocating jobs to warps automatically based on type information. Before kernel invocation, Ikra generates a \emph{job reordering array}, such that the base array is sorted according the elements' types (Figure~\ref{fig:ex_job_reorder}). Ikra does not actually change the order elements in the base array to ensure that other parts of the program outside of the parallel section are not affected.
+Ikra tries to avoid branch divergence by allocating jobs to warps automatically based on type information. Before kernel invocation, Ikra generates a \emph{job reordering array}, such that the base array is sorted according the elements' types (Figure~\ref{fig:ex_job_reorder}). Ikra does not actually change the order elements in the base array to ensure that other parts of the program outside of the parallel section are not affected.
 
 \begin{figure}[!htp]
     \centering
@@ -296,7 +299,7 @@ In traditional programming languages and virtual machines, objects are typically
 \paragraph{Memory Coalescing}
 Global memory is one of the main bottlenecks of GPUs. One approach is to aim for memory access patterns where memory that is accessed in parallel by a number of threads is spatially local. Such memory accesses can be coalesced, i.e., the GPU can process such accesses in a single request, alleviating the global memory bottleneck.
 
-Since a GPU is a SIMD system, all threads within a warp have to execute the same instruction at a time. Consequently, if one thread accesses an instance variable, then all other threads within the same warp access the same instance variable (or block because of thread divergence), probably in a different object. In this situation, a columnar object layout is superior to a row-based object layout, because parallel accesses to the same instance variable are more likely to be spatially local (Figure~\ref{fig:ex_obj_layout}).
+Since a GPU is a SIMD system, all threads within a warp have to execute the same instruction at a time. Consequently, if one thread accesses an instance variable, then all other threads within the same warp access the same instance variable (or block because of branch divergence), probably in a different object. In this situation, a columnar object layout is superior to a row-based object layout, because parallel accesses to the same instance variable are more likely to be spatially local (Figure~\ref{fig:ex_obj_layout}).
 
 \begin{figure}[!htp]
     \centering
@@ -327,7 +330,7 @@ Since objects are now represented as fields of arrays, Ikra must generate differ
 
 In the following, we consider reading/writing instance variables of an object and calling methods on an object, where the object is identified by its type $c$ and its ID $i$. Whenever objects are passed around, Ikra actually generates source code that passes their IDs around. Passing type information is not necessary, because we assume that we know the type of every expression and variable\footnote{We consider subclasses to be an entirely different type in this section.}.
 
-Reading an instance variable $v$ of object $o$ with type $c$ and ID $i$ translates to reading the column $A_{c,v}[i]$. Writing an instance variable translates to writing into the same column at the same position.
+Reading an instance variable $v$ of object $o$ with type $c$ and ID $i$ translates to reading the column $A_{c,v}[i]$. Writing an instance variable translates to writing into the same column slot.
 
 Every instance method is translated to a device function, where the type $c$ is mangled into its name and the first parameter has type \texttt{int} and represents the ID of \texttt{self} object. Whenever Ikra encounters a method call during code translation, it determines the receiver's type and generates a call to the appropriate device function.
 
@@ -358,27 +361,27 @@ To support dynamically-typed expressions, we extend the idea of class-specific o
 
 Whenever an object ID was previously used, we now use a tuple of object ID and \emph{class tag}. A class tag is a unique \texttt{int} identifier for a certain class. Class tags are used for object references and for method calls. A Ruby variable is now represented by two CUDA \texttt{int} variables: one for the class tag and one for the object ID. Similarly, when passing an object as an argument, the same two arguments are passed in the generated CUDA code.
 
-Before dispatching to a method, the generated CUDA code determines the type of the receiver in a switch statement to select the corresponding instance method. In the following example, two arrays (actor tags and actor IDs) are passed to the kernel function. The device function representing the block invokes the correct instance method.
+Before dispatching to a method, the generated CUDA code determines the type of the receiver in a switch statement to select the corresponding instance method. In the following example, two arrays (agent tags and agent IDs) are passed to the kernel function. The device function representing the block invokes the correct instance method.
 
 \lstset{language=C++}
 \begin{lstlisting}
-<@\textbf{\_\_global\_\_ void}@> kernel(<@\textbf{int}@> *jobs, <@\textbf{int}@> *actor_tag, <@\textbf{int}@> *actor_id, <@\textbf{int}@> weather)
+<@\textbf{\_\_global\_\_ void}@> kernel(<@\textbf{int}@> *jobs, <@\textbf{int}@> *agent_tag, <@\textbf{int}@> *agent_id, <@\textbf{int}@> weather)
 {
   <@\textbf{int}@> tid = blockIdx.x * blockDim.x + threadIdx.x;
-  block(actor_tag[jobs[id]], actor_id[jobs[id]], weather);
+  block(agent_tag[jobs[id]], agent_id[jobs[id]], weather);
 }
 
-<@\textbf{\_\_device\_\_ void}@> block(<@\textbf{int}@> actor_tag, <@\textbf{int}@> actor_id, <@\textbf{int}@> weather)
+<@\textbf{\_\_device\_\_ void}@> block(<@\textbf{int}@> agent_tag, <@\textbf{int}@> agent_id, <@\textbf{int}@> weather)
 {
   <@\textbf{for}@> (<@\textbf{int}@> i = 0; i <= ticks; i++)
   {
-    <@\textbf{switch}@> (actor_tag)
+    <@\textbf{switch}@> (agent_tag)
     {
       <@\textbf{case}@> TAG_Car:
-        method_Car_move(actor_id, weather);
+        method_Car_move(agent_id, weather);
         <@\textbf{break}@>;
       <@\textbf{case}@> TAG_Pedestrian:
-        method_Pedestrian_move(actor_id, weather);
+        method_Pedestrian_move(agent_id, weather);
         <@\textbf{break}@>;
       <@\textbf{default}@>:
         <@\textit{/* same mechanism to dispatch to method\_missing */}@>
@@ -391,9 +394,9 @@ Before dispatching to a method, the generated CUDA code determines the type of t
 In the light of class tags, we extend the columnar object layout as follows. If Ikra cannot infer the type of an instance variable unambiguously, two columns are created for that instance variable: one for the class tag and one for the object ID.
 
 \paragraph{Polymorphism}
-In terms of type inference, subclasses are treated as entirely different types instead of subtypes. For example, if type inference determines that the type of a variable can be \texttt{Car} or \texttt{Pedestrian}, the type of that variable is the set $\{\texttt{Car}, \texttt{Pedestrian}\}$ instead of \texttt{Actor}. In this case, the type dispatch statements for a method call contains can handle only \texttt{Car} and \texttt{Pedestrian}, but not, for example, \texttt{Bus}, which is also a subclass of \texttt{Actor}. If a method is only implemented in a superclass (e.g., \texttt{Actor}), but not in the receiver's class itself (e.g., \texttt{Car}), the generated code can dispatch to that method directly; that case can be detected at translation time. In addition to the object ID of the \texttt{self} (receiver) object, its class tag is also passed as an argument during method calls.
+In terms of type inference, subclasses are treated as entirely different types instead of subtypes. For example, if type inference determines that the type of a variable can be \texttt{Car} or \texttt{Pedestrian}, the type of that variable is the set $\{\texttt{Car}, \texttt{Pedestrian}\}$ instead of \texttt{Agent}. In this case, the type dispatch statements for a method call contains can handle only \texttt{Car} and \texttt{Pedestrian}, but not, for example, \texttt{Bus}, which is also a subclass of \texttt{Agent}. If a method is only implemented in a superclass (e.g., \texttt{Agent}), but not in the receiver's class itself (e.g., \texttt{Car}), the generated code can dispatch to that method directly; that case can be detected at translation time. In addition to the object ID of the \texttt{self} (receiver) object, its class tag is also passed as an argument during method calls.
 
-Instance variables are stored together with the first class in the superclass hierarchy, in which they were used for the first time. For example, \texttt{@street} is stored as a column of class \texttt{Actor}. Subclasses and superclass share the same IDs. If an object is an instance of a different subclass, the corresponding column values are \emph{null} values~\cite{Mattis:2015:COI:2814228.2814230}. For example, if object 15 is a \texttt{Pedestrian}, then $A_{\texttt{Car}, \texttt{@max\_velocity}}[15]$ is null.
+Instance variables are stored together with the first class in the superclass hierarchy, in which they were used for the first time. For example, \texttt{@street} is stored as a column of class \texttt{Agent}. Subclasses and superclass share the same IDs. If an object is an instance of a different subclass, the corresponding column values are \emph{null} values~\cite{Mattis:2015:COI:2814228.2814230}. For example, if object 15 is a \texttt{Pedestrian}, then $A_{\texttt{Car}, \texttt{@max\_velocity}}[15]$ is null.
 
 \subsection{Read/write Analysis for Instance Variables}
 \label{sec:impl_copyback}
@@ -406,7 +409,7 @@ The object tracer is responsible for generating a list of objects that must be t
 \section{Microbenchmarks}
 To evaluate our optimizations, we conducted a series of microbenchmarks using the traffic simulation example\footnote{\texttt{git@github.com:matthias-springer/array2016-paper.git}}. We ran benchmarks on the Tsubame supercomputer\footnote{\url{http://tsubame.gsic.titech.ac.jp/}} on a \emph{thin} compute node with two Intel Xeon X5670 CPUs (2.93~GHz $\times$ 6 cores each), 54~GB RAM, and an nVidia Tesla K20Xm GPU, running Linux \texttt{3.0.76-0.11-default x86\_64}, CUDA 7.0.27, and Ruby 1.9.3p448.
 
-We simulated 1,000,000 iterations of a random street network with 500 streets and random vertex out-degrees between 1 and 10, 4096 cars, and 16384 pedestrians. All benchmark running times are average values of 5 runs\footnote{GPU running times showed a very low standard deviation.} using the same random scenario.
+We simulated 1,000,000 iterations of a random street network with 500 streets and random vertex out-degrees between 1 and 10, 4096 cars, and 16384 pedestrians. All benchmark running times are average values of 5 runs using the same random scenario.
 
 \paragraph{Kernel Execution}
 Figure~\ref{fig:bench_kernel} shows the kernel running time of the traffic simulation in various configurations. Figure~\ref{fig:bench_kernel}a shows the running time with a columnar object layout, which is around 30\% faster than the row-based layout in Figure~\ref{fig:bench_kernel}b.
@@ -418,7 +421,7 @@ Figure~\ref{fig:bench_kernel} shows the kernel running time of the traffic simul
     \label{fig:bench_kernel}
 \end{figure}
 
-The objects involved in this example are quite small. Actors are represented by 32-byte structs (three instance variables and class tag) in row-based layout, or three 4-byte columns (class tag is passed as an argument) in a columnar layout, respectively. The GPU's L1 cache is 48~KB, with a cache line size of 128~bytes. To analyze the effect of caching, we ran the row-based benchmark with artificially enlarged object sizes (10/5 additional instance variables for actors/streets, resulting in an object size of 72~bytes/32~bytes, respectively; Figure~\ref{fig:bench_kernel}c). This configuration is interesting because the example code accesses all instance variables of an actor subsequently, diminishing the advantage of a column-based layout, because the entire object (and three subsequent objects) can be held in cache (prefetching). A columnar object layout is around 60\% faster compared to this configuration.
+The objects involved in this example are quite small. Agents are represented by 32-byte structs (three instance variables and class tag) in row-based layout, or three 4-byte columns (class tag is passed as an argument) in a columnar layout, respectively. The GPU's L1 cache is 48~KB, with a cache line size of 128~bytes. To analyze the effect of caching, we ran the row-based benchmark with artificially enlarged object sizes (10/5 additional instance variables for agents/streets, resulting in an object size of 72~bytes/32~bytes, respectively; Figure~\ref{fig:bench_kernel}c). This configuration is interesting because the example code accesses all instance variables of an agent subsequently, diminishing the advantage of a column-based layout, because the entire object (and three subsequent objects) can be held in cache (prefetching). A columnar object layout is around 60\% faster compared to this configuration.
 
 \paragraph{Job Reordering}
 Figure~\ref{fig:job_reorder_arr} shows the running time for generating the job reordering array (warp size 32). This is currently done in the Ruby interpreter but could be moved to the GPU side in future versions. The running time increases linearly with the number of elements in the base array. Changing the number of types (classes) has only a small effect on the running time. We assume that this number is much smaller than the number of elements. For the traffic simulation example, the running time for generating the job reordering array is neglectable.
@@ -431,7 +434,7 @@ Figure~\ref{fig:job_reorder_arr} shows the running time for generating the job r
 \end{figure}
 
 \paragraph{Tracing Object and Generating Columns}
-Figure~\ref{fig:tracing} shows the running time for tracing objects and generating columns (Algorithm~2) for the traffic simulation example. For the number of actors/streets that were used in the kernel benchmarks, the running time is neglectable. Moreover, in future plans for Ikra we want to perform this step only once and reuse data that was already processed and moved to the GPU earlier (see Section~\ref{sec:minimizing_dtr}).
+Figure~\ref{fig:tracing} shows the running time for tracing objects and generating columns (Algorithm~2) for the traffic simulation example. For the number of agents/streets that were used in the kernel benchmarks, the running time is neglectable. Moreover, in future plans for Ikra we want to perform this step only once and reuse data that was already processed and moved to the GPU earlier (see Section~\ref{sec:minimizing_dtr}).
 
 \begin{figure}[!htp]
     \includegraphics[width=\columnwidth]{obj_tracer.pdf}
@@ -445,7 +448,7 @@ The running time for transferring columns to the GPU and generating the CUDA cod
 \section{Related Work}
 Columnar data layouts are known to be superior compared to row-based data layouts for certain kinds of database queries (e.g., OLAP queries)~\cite{Plattner:2009:CDA:1559845.1559846}, and especially for GPU-powered databases~\cite{Bakkum:2010:ASD:1735688.1735706}. In fact, one of the benefits of column stores for CPU-based database systems is \emph{prefetching}, which is similar to coalescing on GPUs, but without the parallel aspect. Columnar data layouts have also been evaluated for object-oriented programming languages. Mattis et al. have implemented a columnar object layout in Pypy to increase the performance of analytical queries~\cite{Mattis:2015:COI:2814228.2814230}. Ikra essentially uses the same columnar object layout, but extended to polymorphic types.
 
-A number of different techniques exist for avoiding thread divergence, e.g., detecting and delaying divergent branches at runtime in order to execute them at a later time, or factoring out instructions that are common to two (divergent) branches~\cite{Han:2011:RBD:1964179.1964184}. A different approach is to reorder jobs, either with a reordering array (which is what Ikra does) or by physically changing the order of the jobs in the base array. Both techniques can be combined to increase memory coalescing~\cite{Zhang:2011:OED:1950365.1950408} (physically reordering data, then using a reordering array to restore the original semantics), but detailed knowledge about memory access patterns is required. Previous work has also investigated how the overhead of these transformations can be hidden using a CPU-GPU pipelining scheme~\cite{Zhang:2010:SGA:1810085.1810104}, if done at runtime in order to react to changes.
+A number of different techniques exist for avoiding branch divergence, e.g., detecting and delaying divergent branches at runtime in order to execute them at a later time, or factoring out instructions that are common to two (divergent) branches~\cite{Han:2011:RBD:1964179.1964184}. A different approach is to reorder jobs, either with a reordering array (which is what Ikra does) or by physically changing the order of the jobs in the base array. Both techniques can be combined to increase memory coalescing~\cite{Zhang:2011:OED:1950365.1950408} (physically reordering data, then using a reordering array to restore the original semantics), but detailed knowledge about memory access patterns is required. Previous work has also investigated how the overhead of these transformations can be hidden using a CPU-GPU pipelining scheme~\cite{Zhang:2010:SGA:1810085.1810104}, if done at runtime in order to react to changes.
 
 Ishizaki et al. presented a framework for executing lambda expression used with the parallel streams API in Java~8 programs on nVidia GPUs~\cite{ishizaki2015compiling}. Their approach is to generate LLVM intermediate code (IR) from Java bytecode, which is in our opinion superior to Ikra's approach of performing a Ruby-to-CUDA source-code-to-source-code transformation from an engineering point of view. Future versions of Ikra might generate LLVM IR code from YARV bytecode~\cite{Sasada:2005:YYR:1094855.1094912}. Further optimizations of their Java~8 compiler include a check for array aliasing (which is what Ikra's object tracer does implicitly) and utilizing a read-only cache. Their implementation supports virtual method calls using direct devirtualization if the receiver type can be uniquely determined at compile time, or guarded devirtualization, executing an iteration on the GPU if the guard fails; in either case, the GPU code must only be able to handle monomorphic method calls. Ikra's code generator applies direct devirtualization, i.e., it does not generate type dispatch statements if the receiver type can be inferred unambiguously. Otherwise, it generates CUDA code that dispatches to the correct method based on class tags.
 
@@ -462,7 +465,7 @@ It is our vision that the parallel CUDA code is in full control of instance crea
 
 \subsection{Data Modification}
 \label{sec:gen_new_obj}
-Ikra's capabilities to modify data inside a parallel section are still limited, nevertheless sufficient for use cases like actor-based traffic simulations or OLAP applications, where data is mostly static.
+Ikra's capabilities to modify data inside a parallel section are still limited, nevertheless sufficient for use cases like agent-based traffic simulations or OLAP applications, where data is mostly static.
 
 For example, new objects can be created only on the Ruby side, but not inside parallel sections. This is because instance variable columns must be increased when adding new objects. However, increasing their size might require moving them to a different place in the global memory, which is expensive.
 
@@ -472,22 +475,22 @@ As another example, it is currently not possible to add or remove elements from 
 
 \subsection{Nested Loops}
 \label{sec:nested_loops}
-Ikra does not yet support nested loops properly. Consider the main loop of the traffic simulation as an example. Putting a \texttt{ticks} loop inside the \texttt{peach} block works but contradicts intuition. In a sequential program, most programmers would formulate the simulation code as a series of simulation ticks, where every simulation tick iterates over all actors, as opposed to iterating of over all actors, where every actor is moved for a series of simulation ticks (see listing).
+Ikra does not yet support nested loops properly. Consider the main loop of the traffic simulation as an example. Putting a \texttt{ticks} loop inside the \texttt{peach} block works but contradicts intuition. In a sequential program, most programmers would formulate the simulation code as a series of simulation ticks, where every simulation tick iterates over all agents, as opposed to iterating of over all agents, where every agent is moved for a series of simulation ticks (see listing).
 
 \begin{lstlisting}
-actors.peach <@\textbf{do}@> |actor|
+agents.peach <@\textbf{do}@> |agent|
   <@\textbf{for}@> i in 1..ticks
-    actor.move(weather)
+    agent.move(weather)
     synchronize
   <@\textbf{end}@>
 <@\textbf{end}@>
 \end{lstlisting}
 
-The following code snippet is more intuitive, but would allocate one thread per tick instead of one thread per actor. However, the mechanism described in this paper takes advantage of allocating threads based on the actors' types.
+The following code snippet is more intuitive, but would allocate one thread per tick instead of one thread per agent\footnote{Wrapping \texttt{peach} inside an \texttt{each} block leads to unnecessary data transfers.}. However, the mechanism described in this paper takes advantage of allocating threads based on the agents' types.
 \begin{lstlisting}
 (1..ticks).peach <@\textbf{do}@>
-  actors.each <@\textbf{do}@> |actor|
-    actor.move(weather)
+  agents.each <@\textbf{do}@> |agent|
+    agent.move(weather)
   <@\textbf{end}@>
 <@\textbf{end}@>
 \end{lstlisting}
@@ -502,7 +505,7 @@ Ikra's columnar object layout is similar to the data layout of column databases.
 % Only write back objects if they are accessed; how can we hook into object access? Proxies?
 
 \section{Summary}
-We presented Ikra, a just-in-time Ruby-to-CUDA compiler for array-based parallel operations. Ikra allows programmers to write source code in an object-oriented way and applies optimizations to reduce thread divergence and to increase memory coalescing. Type information is used to reorder objects in the base array, making sure that only objects of the same type are executed in a warp. A columnar object layout is beneficial for memory coalescing, because threads inside a warp are executed in a SIMD manner. Future work will focus on additional performance optimizations and take into account a broader set of examples and benchmarks.
+We presented Ikra, a dynamic Ruby-to-CUDA compiler for array-based parallel operations. Ikra allows programmers to write source code in an object-oriented way and applies optimizations to reduce branch divergence and to increase memory coalescing. Type information is used to reorder objects in the base array, making sure that only objects of the same type are executed in a warp. A columnar object layout is beneficial for memory coalescing, because threads inside a warp are executed in a SIMD manner. Future work will focus on additional performance optimizations and take into account a broader set of examples and benchmarks.
 
 % We recommend abbrvnat bibliography style.
 
