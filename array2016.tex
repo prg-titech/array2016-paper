@@ -287,7 +287,7 @@ Since a GPU is a SIMD system, all threads within a warp have to execute the same
     \label{fig:ex_obj_layout}%
 \end{figure}
 
-\paragraph{Generating Structure-of-Arrays}
+\paragraph{Generating Structure of Arrays}
 In the following, we present a first approach for representing objects as a structure of arrays. For the moment, we assume that all variables and expressions are monomorphic (there are also no subtypes). This approach will be extended in the light of polymorphic expressions in the next section.
 
 After running the object tracer, we know which objects should be transferred to the GPU. These objects are processed as follows.
