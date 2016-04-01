@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
+from pylab import *
 
+figure(figsize=(10,5))
 x_axis = [100000, 500000, 1000000, 5000000, 10000000]
 p1, = plt.plot(x_axis, [0.130000,0.730000,1.450000,7.310000, 15.020000], 'k:')
 p2, = plt.plot(x_axis, [0.150000,0.720000,1.460000,8.250000, 15.620000], 'k--')

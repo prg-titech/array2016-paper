@@ -7,7 +7,7 @@ N = 3
 ind = np.arange(N) # the x locations for the groups
 width = 0.4       # the width of the bars
 
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=(10,5))
 
 ax.set_ylim(0,32) # outliers only
 #ax2.set_ylim(0,35) # most of the data
@@ -39,9 +39,9 @@ rectsClassCached = ax.bar(ind+width, classCached, width, color='w', hatch='o')
 # add some text for labels, title and axes ticks
 #ax2.set_ylabel('Runtime (ms)')
 #ax.set_title('Average rendering runtime per frame')
-ax.set_ylabel('Kernel runtime (s)')
-ax.set_xticks(ind+width+0.14)
-ax.set_xticklabels( ('(a) column layout', '(b) row layout \n (obj. size 32B)', '(c) row layout \n (obj. size 72B)') )
+ax.set_ylabel('Kernel runtime (seconds)')
+ax.set_xticks(ind+width)
+ax.set_xticklabels( ('(a) SoA layout', '(b) AoS layout \n (obj. size 32B)', '(c) AoS layout \n (obj. size 72B)') )
 #ax2.set_yticks(ax2.get_yticks()[:-1])
 ax.set_yticks(ax.get_yticks()[1:])
 

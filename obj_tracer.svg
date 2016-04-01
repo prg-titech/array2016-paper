@@ -10,10 +10,10 @@
    xmlns:xlink="http://www.w3.org/1999/xlink"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   height="230.53436pt"
+   height="319.81436pt"
    version="1.1"
-   viewBox="0 0 539.29596 230.53436"
-   width="539.29596pt"
+   viewBox="0 0 610.99536 319.81436"
+   width="610.99536pt"
    id="svg2"
    inkscape:version="0.91 r13725"
    sodipodi:docname="obj_tracer.svg">
@@ -38,7 +38,7 @@
      guidetolerance="10"
      inkscape:pageopacity="0"
      inkscape:pageshadow="2"
-     inkscape:window-width="664"
+     inkscape:window-width="720"
      inkscape:window-height="480"
      id="namedview665"
      showgrid="false"
@@ -46,9 +46,9 @@
      fit-margin-left="0"
      fit-margin-right="0"
      fit-margin-bottom="0"
-     inkscape:zoom="0.46969697"
-     inkscape:cx="344.45709"
-     inkscape:cy="163.59296"
+     inkscape:zoom="0.34444444"
+     inkscape:cx="510.43528"
+     inkscape:cy="219.14296"
      inkscape:window-x="20"
      inkscape:window-y="43"
      inkscape:window-maximized="0"
@@ -60,22 +60,22 @@
        inkscape:collect="always"
        xlink:href="#h9782ebb09d"
        id="pattern5166"
-       patternTransform="translate(-15.0682,24.34)" />
+       patternTransform="translate(44.555,35.5)" />
     <pattern
        inkscape:collect="always"
        xlink:href="#h9782ebb09d"
        id="pattern5164"
-       patternTransform="translate(-15.0682,24.34)" />
+       patternTransform="translate(44.555,35.5)" />
     <pattern
        inkscape:collect="always"
        xlink:href="#h9782ebb09d"
        id="pattern5162"
-       patternTransform="translate(-15.0682,24.34)" />
+       patternTransform="translate(44.555,35.5)" />
     <pattern
        inkscape:collect="always"
        xlink:href="#h9782ebb09d"
        id="pattern5160"
-       patternTransform="translate(-15.0682,24.34)" />
+       patternTransform="translate(44.555,35.5)" />
     <style
        type="text/css"
        id="style6">
@@ -85,7 +85,7 @@
   <g
      style="stroke-linecap:butt;stroke-linejoin:round"
      id="axes_1"
-     transform="translate(15.0682,-24.34)">
+     transform="translate(-44.555,-35.5)">
     <g
        style="stroke-linecap:butt;stroke-linejoin:round"
        id="patch_2">
@@ -93,7 +93,7 @@
          inkscape:connector-curvature="0"
          id="path14"
          style="fill:#ffffff;stroke-linecap:butt;stroke-linejoin:round"
-         d="m 156.377,223.56 360.3,0 0,-198.72 -360.3,0 z" />
+         d="m 216,324 432,0 0,-288 -432,0 z" />
     </g>
     <g
        style="stroke-linecap:butt;stroke-linejoin:round"
@@ -102,8 +102,8 @@
          inkscape:connector-curvature="0"
          id="path17"
          style="fill:url(#pattern5160);stroke:#000000;stroke-linecap:butt;stroke-linejoin:round"
-         d="m 156.377,218.592 2.666,0 0,-39.744 -2.666,0 z"
-         clip-path="url(#p2dd3033054)" />
+         d="m 216,316.8 3.197,0 0,-57.6 -3.197,0 z"
+         clip-path="url(#pe11059c682)" />
     </g>
     <g
        style="stroke-linecap:butt;stroke-linejoin:round"
@@ -112,8 +112,8 @@
          inkscape:connector-curvature="0"
          id="path20"
          style="fill:url(#pattern5162);stroke:#000000;stroke-linecap:butt;stroke-linejoin:round"
-         d="m 156.377,168.912 12.322,0 0,-39.744 -12.322,0 z"
-         clip-path="url(#p2dd3033054)" />
+         d="m 216,244.8 14.774,0 0,-57.6 -14.774,0 z"
+         clip-path="url(#pe11059c682)" />
     </g>
     <g
        style="stroke-linecap:butt;stroke-linejoin:round"
@@ -122,8 +122,8 @@
          inkscape:connector-curvature="0"
          id="path23"
          style="fill:url(#pattern5164);stroke:#000000;stroke-linecap:butt;stroke-linejoin:round"
-         d="m 156.377,119.232 55.054,0 0,-39.744 -55.054,0 z"
-         clip-path="url(#p2dd3033054)" />
+         d="m 216,172.8 66.01,0 0,-57.6 -66.01,0 z"
+         clip-path="url(#pe11059c682)" />
     </g>
     <g
        style="stroke-linecap:butt;stroke-linejoin:round"
@@ -132,8 +132,8 @@
          inkscape:connector-curvature="0"
          id="path26"
          style="fill:url(#pattern5166);stroke:#000000;stroke-linecap:butt;stroke-linejoin:round"
-         d="m 156.377,69.552 314.254,0 0,-39.744 -314.254,0 z"
-         clip-path="url(#p2dd3033054)" />
+         d="m 216,100.8 376.79,0 0,-57.6 -376.79,0 z"
+         clip-path="url(#pe11059c682)" />
     </g>
     <g
        style="stroke-linecap:butt;stroke-linejoin:round"
@@ -159,9 +159,9 @@
                height="100%"
                width="100%"
                id="use36"
-               y="223.56"
+               y="324"
                xlink:href="#m93b0483c22"
-               x="156.3768"
+               x="216"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -183,9 +183,9 @@
                height="100%"
                width="100%"
                id="use44"
-               y="24.84"
+               y="36"
                xlink:href="#m741efc42ff"
-               x="156.3768"
+               x="216"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -204,7 +204,7 @@
           <g
              style="stroke-linecap:butt;stroke-linejoin:round"
              id="g50"
-             transform="matrix(0.12,0,0,-0.12,153.35336,236.67812)">
+             transform="matrix(0.12,0,0,-0.12,212.97656,337.11813)">
             <use
                height="100%"
                width="100%"
@@ -229,9 +229,9 @@
                height="100%"
                width="100%"
                id="use58"
-               y="223.56"
+               y="324"
                xlink:href="#m93b0483c22"
-               x="228.43692"
+               x="302.39999"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -245,9 +245,9 @@
                height="100%"
                width="100%"
                id="use63"
-               y="24.84"
+               y="36"
                xlink:href="#m741efc42ff"
-               x="228.43692"
+               x="302.39999"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -266,7 +266,7 @@
           <g
              style="stroke-linecap:butt;stroke-linejoin:round"
              id="g69"
-             transform="matrix(0.12,0,0,-0.12,225.60661,236.67812)">
+             transform="matrix(0.12,0,0,-0.12,299.56969,337.11813)">
             <use
                height="100%"
                width="100%"
@@ -291,9 +291,9 @@
                height="100%"
                width="100%"
                id="use77"
-               y="223.56"
+               y="324"
                xlink:href="#m93b0483c22"
-               x="300.49704"
+               x="388.79999"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -307,9 +307,9 @@
                height="100%"
                width="100%"
                id="use82"
-               y="24.84"
+               y="36"
                xlink:href="#m741efc42ff"
-               x="300.49704"
+               x="388.79999"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -328,7 +328,7 @@
           <g
              style="stroke-linecap:butt;stroke-linejoin:round"
              id="g88"
-             transform="matrix(0.12,0,0,-0.12,293.91954,236.67812)">
+             transform="matrix(0.12,0,0,-0.12,382.2225,337.11813)">
             <use
                height="100%"
                width="100%"
@@ -361,9 +361,9 @@
                height="100%"
                width="100%"
                id="use98"
-               y="223.56"
+               y="324"
                xlink:href="#m93b0483c22"
-               x="372.55716"
+               x="475.20001"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -377,9 +377,9 @@
                height="100%"
                width="100%"
                id="use103"
-               y="24.84"
+               y="36"
                xlink:href="#m741efc42ff"
-               x="372.55716"
+               x="475.20001"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -390,7 +390,7 @@
           <g
              style="stroke-linecap:butt;stroke-linejoin:round"
              id="g106"
-             transform="matrix(0.12,0,0,-0.12,366.10528,236.67812)">
+             transform="matrix(0.12,0,0,-0.12,468.74813,337.11813)">
             <use
                height="100%"
                width="100%"
@@ -423,9 +423,9 @@
                height="100%"
                width="100%"
                id="use116"
-               y="223.56"
+               y="324"
                xlink:href="#m93b0483c22"
-               x="444.61728"
+               x="561.59998"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -439,9 +439,9 @@
                height="100%"
                width="100%"
                id="use121"
-               y="24.84"
+               y="36"
                xlink:href="#m741efc42ff"
-               x="444.61728"
+               x="561.59998"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -460,7 +460,7 @@
           <g
              style="stroke-linecap:butt;stroke-linejoin:round"
              id="g127"
-             transform="matrix(0.12,0,0,-0.12,437.8204,236.67812)">
+             transform="matrix(0.12,0,0,-0.12,554.80313,337.11813)">
             <use
                height="100%"
                width="100%"
@@ -493,9 +493,9 @@
                height="100%"
                width="100%"
                id="use137"
-               y="223.56"
+               y="324"
                xlink:href="#m93b0483c22"
-               x="516.67743"
+               x="648"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -509,9 +509,9 @@
                height="100%"
                width="100%"
                id="use142"
-               y="24.84"
+               y="36"
                xlink:href="#m741efc42ff"
-               x="516.67743"
+               x="648"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -522,7 +522,7 @@
           <g
              style="stroke-linecap:butt;stroke-linejoin:round"
              id="g145"
-             transform="matrix(0.12,0,0,-0.12,510.00615,236.67812)">
+             transform="matrix(0.12,0,0,-0.12,641.32875,337.11813)">
             <use
                height="100%"
                width="100%"
@@ -622,7 +622,7 @@
         <g
            style="stroke-linecap:butt;stroke-linejoin:round"
            id="g168"
-           transform="matrix(0.12,0,0,-0.12,280.8696,253.29187)">
+           transform="matrix(0.12,0,0,-0.12,376.3425,353.73187)">
           <use
              height="100%"
              width="100%"
@@ -786,9 +786,9 @@
                height="100%"
                width="100%"
                id="use212"
-               y="198.72"
+               y="288"
                xlink:href="#m728421d6d4"
-               x="156.3768"
+               x="216"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -810,9 +810,9 @@
                height="100%"
                width="100%"
                id="use220"
-               y="198.72"
+               y="288"
                xlink:href="#mcb0005524f"
-               x="516.67743"
+               x="648"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -856,7 +856,7 @@
           <g
              style="stroke-linecap:butt;stroke-linejoin:round"
              id="g231"
-             transform="matrix(0.12,0,0,-0.12,14.5568,195.31256)">
+             transform="matrix(0.12,0,0,-0.12,74.18,284.59256)">
             <use
                height="100%"
                width="100%"
@@ -1064,7 +1064,7 @@
           <g
              style="stroke-linecap:butt;stroke-linejoin:round"
              id="g284"
-             transform="matrix(0.12,0,0,-0.12,36.72305,208.74994)">
+             transform="matrix(0.12,0,0,-0.12,96.34625,298.02994)">
             <use
                height="100%"
                width="100%"
@@ -1225,9 +1225,9 @@
                height="100%"
                width="100%"
                id="use326"
-               y="149.03999"
+               y="216"
                xlink:href="#m728421d6d4"
-               x="156.3768"
+               x="216"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -1241,9 +1241,9 @@
                height="100%"
                width="100%"
                id="use331"
-               y="149.03999"
+               y="216"
                xlink:href="#mcb0005524f"
-               x="516.67743"
+               x="648"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -1254,7 +1254,7 @@
           <g
              style="stroke-linecap:butt;stroke-linejoin:round"
              id="g334"
-             transform="matrix(0.12,0,0,-0.12,-0.7132,145.63256)">
+             transform="matrix(0.12,0,0,-0.12,58.91,212.59256)">
             <use
                height="100%"
                width="100%"
@@ -1460,7 +1460,7 @@
           <g
              style="stroke-linecap:butt;stroke-linejoin:round"
              id="g386"
-             transform="matrix(0.12,0,0,-0.12,36.72305,159.06994)">
+             transform="matrix(0.12,0,0,-0.12,96.34625,226.02994)">
             <use
                height="100%"
                width="100%"
@@ -1621,9 +1621,9 @@
                height="100%"
                width="100%"
                id="use428"
-               y="99.360001"
+               y="144"
                xlink:href="#m728421d6d4"
-               x="156.3768"
+               x="216"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -1637,9 +1637,9 @@
                height="100%"
                width="100%"
                id="use433"
-               y="99.360001"
+               y="144"
                xlink:href="#mcb0005524f"
-               x="516.67743"
+               x="648"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -1650,7 +1650,7 @@
           <g
              style="stroke-linecap:butt;stroke-linejoin:round"
              id="g436"
-             transform="matrix(0.12,0,0,-0.12,-0.7132,95.952562)">
+             transform="matrix(0.12,0,0,-0.12,58.91,140.59256)">
             <use
                height="100%"
                width="100%"
@@ -1856,7 +1856,7 @@
           <g
              style="stroke-linecap:butt;stroke-linejoin:round"
              id="g488"
-             transform="matrix(0.12,0,0,-0.12,29.08805,109.38994)">
+             transform="matrix(0.12,0,0,-0.12,88.71125,154.02994)">
             <use
                height="100%"
                width="100%"
@@ -2025,9 +2025,9 @@
                height="100%"
                width="100%"
                id="use532"
-               y="49.68"
+               y="72"
                xlink:href="#m728421d6d4"
-               x="156.3768"
+               x="216"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -2041,9 +2041,9 @@
                height="100%"
                width="100%"
                id="use537"
-               y="49.68"
+               y="72"
                xlink:href="#mcb0005524f"
-               x="516.67743"
+               x="648"
                style="stroke:#000000;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:round" />
           </g>
         </g>
@@ -2054,7 +2054,7 @@
           <g
              style="stroke-linecap:butt;stroke-linejoin:round"
              id="g540"
-             transform="matrix(0.12,0,0,-0.12,-15.9832,46.272562)">
+             transform="matrix(0.12,0,0,-0.12,43.64,68.592562)">
             <use
                height="100%"
                width="100%"
@@ -2284,7 +2284,7 @@
           <g
              style="stroke-linecap:butt;stroke-linejoin:round"
              id="g599"
-             transform="matrix(0.12,0,0,-0.12,21.45305,59.709938)">
+             transform="matrix(0.12,0,0,-0.12,81.07625,82.029938)">
             <use
                height="100%"
                width="100%"
@@ -2456,7 +2456,7 @@
          inkscape:connector-curvature="0"
          id="path642"
          style="fill:none;stroke:#000000;stroke-linecap:butt;stroke-linejoin:round"
-         d="m 156.377,24.84 360.3,0" />
+         d="m 216,36 432,0" />
     </g>
     <g
        style="stroke-linecap:butt;stroke-linejoin:round"
@@ -2465,7 +2465,7 @@
          inkscape:connector-curvature="0"
          id="path645"
          style="fill:none;stroke:#000000;stroke-linecap:butt;stroke-linejoin:round"
-         d="m 516.677,223.56 0,-198.72" />
+         d="M 648,324 648,36" />
     </g>
     <g
        style="stroke-linecap:butt;stroke-linejoin:round"
@@ -2474,7 +2474,7 @@
          inkscape:connector-curvature="0"
          id="path648"
          style="fill:none;stroke:#000000;stroke-linecap:butt;stroke-linejoin:round"
-         d="m 156.377,223.56 360.3,0" />
+         d="m 216,324 432,0" />
     </g>
     <g
        style="stroke-linecap:butt;stroke-linejoin:round"
@@ -2483,19 +2483,19 @@
          inkscape:connector-curvature="0"
          id="path651"
          style="fill:none;stroke:#000000;stroke-linecap:butt;stroke-linejoin:round"
-         d="m 156.377,223.56 0,-198.72" />
+         d="M 216,324 216,36" />
     </g>
   </g>
   <defs
      id="defs653">
     <clipPath
-       id="p2dd3033054"
+       id="pe11059c682"
        style="stroke-linecap:butt;stroke-linejoin:round">
       <rect
-         height="198.72"
-         width="360.3006"
-         x="156.3768"
-         y="24.84"
+         height="288"
+         width="432"
+         x="216"
+         y="36"
          id="rect656"
          style="stroke-linecap:butt;stroke-linejoin:round" />
     </clipPath>
