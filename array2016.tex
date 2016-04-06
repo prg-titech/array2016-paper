@@ -177,7 +177,7 @@ GPGPU, CUDA, Ruby, object-oriented programming
 \section{Introduction}
 With the availability and affordability of powerful GPUs, general purpose computing on graphics processing units (GPGPU) is becoming more and more popular in high-performance computing. Nowadays, many supercomputers rely on GPUs as main processing units, because they allow for massively parallel execution of algorithms or simulations with thousands of threads per GPU. However, GPU programming differs from traditional CPU programming, mostly because of architectural differences.
 
-The goal of the Ikra project is to make GPU programming available to developers who are not familiar with the details of GPUs and their programming languages. Ikra is a library for Ruby that translates parallel sections to CUDA code and executes them in parallel on GPUs. It extends our previous work~\cite{Masuhara:2012:DER:2237887.2237888} with a dynamic compilation approach to allow for a larger number of optimizations and tighter integration with Ruby. We target the Ruby programming language because it provides powerful mechanisms for embedding DSLs in the language, which will be useful for future work.
+The goal of the Ikra project is to make GPU programming available to developers who are not familiar with the details of GPUs and their programming languages. Ikra is a library for Ruby that translates parallel sections to CUDA code and executes them in parallel on GPUs. It extends our previous work~\cite{Masuhara:2012:DER:2237887.2237888} with a dynamic compilation approach to allow for a larger number of optimizations and tighter integration with Ruby. To that end, Ikra also supports polymorphic expressions and variables, allowing programmers to write Ruby code in a \emph{natural} way, i.e., programmers should be able to write the same source code that they would write in a standard Ruby environment. We target the Ruby programming language because it provides powerful mechanisms for embedding DSLs in the language, which will be useful for future work.
 
 \section{Example: Agent-based Traffic Simulation}
 A simple object-oriented agent-based traffic simulation will serve as a running example in this paper. The basic idea is to simulate the behavior of a number of agents~\cite{Helbing2012} (e.g., cars, buses, pedestrians, etc.), given a street network as a directed graph (Figure~\ref{fig:running_example}) in adjacency list representation. Every agent is located on one street. Every street has a \emph{length} attribute and every agent has a \emph{progress} attribute representing the distance from the beginning of the street. Once these two attributes have the same value, the agent reached an intersection and should be moved to a different street (or make a U-turn if there is no other neighboring street).
@@ -222,7 +222,7 @@ Every \emph{tick} of the simulation progresses the current time by a certain con
 Ikra is a library for Ruby. It adds functionality to arrays to execute \texttt{map}, \texttt{reduce}, \texttt{select} and \texttt{each} operations in parallel. Programmers can \emph{require} Ikra in Ruby files, upon which new parallel versions of array operations are available (e.g., \texttt{pmap}). These parallel array operations take a block as an argument, designate the only parts of a Ruby programs that are parallelized using Ikra.
 
 \subsection{Compilation Process}
-Figure~\ref{fig:overview_arch} gives a high-level overview of Ikra's compilation process. Upon invocation of a parallel section, Ikra acquires the source code of the parallel block, generates an abstract syntax tree (AST), and infers the type of all expressions. As a result, the type of every local and instance variable is known. In the best case, the type of an expression is monomorphic and primitive, but Ikra also supports arbitrary Ruby classes as types, as well as polymorphic types (see Section~\ref{sec:polymorphic}). The type inferer traverses invoked method bodies for all possible receiver types (\emph{union type}). Based on the type-annotated AST, Ikra generates CUDA kernel code and initialization code for kernel invocation, and compiles the CUDA code using the nVidia CUDA toolchain. The result is a shared library which is loaded via Ruby's foreign function interface. Before kernel invocation, the base array and lexical variables along with all reachable objects (via instance variables) are transferred to the GPU's global memory. After kernel invocation, all changed objects and the result of the parallel section (if applicable) are written back to Ruby.
+Figure~\ref{fig:overview_arch} gives a high-level overview of Ikra's compilation process. Upon invocation of a parallel section, Ikra acquires the source code of the parallel block, generates an abstract syntax tree (AST), and infers the type of all expressions. As a result, the type of every local and instance variable is known. In the best case, the type of an expression is monomorphic and primitive, but Ikra also supports arbitrary Ruby classes as types, as well as polymorphic types (see Section~\ref{sec:polymorphic}). The type inference engine traverses invoked method bodies for all possible receiver types (\emph{union type}). Based on the type-annotated AST, Ikra generates CUDA kernel code and initialization code for kernel invocation, and compiles the CUDA code using the nVidia CUDA toolchain. The result is a shared library which is loaded via Ruby's foreign function interface. Before kernel invocation, the base array and lexical variables along with all reachable objects (via instance variables) are transferred to the GPU's global memory. After kernel invocation, all changed objects and the result of the parallel section (if applicable) are written back to Ruby.
 
 \begin{figure}[!tp]
     \includegraphics[width=\columnwidth]{high_level_arch.pdf}
@@ -290,7 +290,8 @@ Since a GPU is a SIMD system, all threads within a warp have to execute the same
 \paragraph{Generating Structure of Arrays}
 In the following, we present a first approach for representing objects as a structure of arrays. For the moment, we assume that all variables and expressions are monomorphic (there are also no subtypes). This approach will be extended in the light of polymorphic expressions in the next section.
 
-After running the object tracer, we know which objects should be transferred to the GPU. These objects are processed as follows.
+After running the object tracer, we know which objects should be transferred to the GPU. Objects are grouped by class and assigned class-specific IDs, which are used as indices into the newly-created structure of arrays (similar to the \emph{system tracer} in Smalltalk~\cite{Krasner:1983:SBH:226}).
+
 \begin{enumerate}
     \item Group objects by their class $c$, resulting in arrays $O_c$.
     \item Assign an ID to every object for all $O_c$, starting from $0$ in every $O_c$, IDs being consecutive. This results in a hash map $H_c$ mapping objects to class-specific IDs.
@@ -312,7 +313,7 @@ Reading an instance variable $v$ of object $o$ with type $c$ and ID $i$ translat
 Every instance method is translated to a device function, where the type $c$ is mangled into its name and the first parameter has type \texttt{int} and represents the ID of \texttt{self} object. Whenever Ikra encounters a method call during code translation, it determines the receiver's type and generates a call to the appropriate device function.
 
 \paragraph{Representation of Arrays}
-The previously-described SoA object layout works well with equally-sized objects, but not for variable-sized objects such as arrays. For example, the instance variable \texttt{@neighbors} of class \texttt{Street} is an array of streets.
+The previously-described SoA object layout works well with equally-sized objects, but not for arrays, which are variable-sized objects. For example, the instance variable \texttt{@neighbors} of class \texttt{Street} is an array of streets.
 
 Ikra effectively represents such $n:m$ relationships as join tables~\cite{Garcia-Molina:2008:DSC:1450931} that are \emph{collapsed}. Such a table is sorted by object IDs for $n$. Furthermore, the $n$ array (column) is not stored as a full array but as RLE tuples~\cite{Abadi:2006:ICE:1142473.1142548} consisting of an implicit ID for $n$, a start offset into the $m$ array, and a length value, distributed among multiple columns. RLE tuples are a well-known optimization in column databases.
 
@@ -329,40 +330,37 @@ From an implementation point of view, an array is an ordinary object with an off
 
 \subsection{Polymorphic Expressions}
 \label{sec:polymorphic}
-In contrast to CUDA, Ruby is a dynamically-typed programming language. One of the goals of the Ikra project is to allow programmers to write Ruby code in a \emph{natural} way, i.e., programmers should be able to write the same source code that they would write in a standard Ruby environment. For this reason, Ikra should also support Ruby expressions whose types cannot be inferred unambiguously at translation time.
-
-Ikra embeds dynamic types into CUDA's static type system by generating explicit type dispatch statements at method call sites based on type tags~\cite{Abadi:1989:DTS:75277.75296} for receivers whose types cannot be inferred unambiguously. From a perspective of object-oriented design, this looks as if every object has a \emph{type} instance variable.
+%In contrast to CUDA, Ruby is a dynamically-typed programming language.  For this reason, Ikra should also support Ruby expressions whose types cannot be inferred unambiguously at translation time.
+Ikra embeds polymorphic types into CUDA's static type system using type tags~\cite{Abadi:1989:DTS:75277.75296} for receivers whose types cannot be inferred unambiguously. This is an extension of the previously-described concept. Monomorphic expressions rely on the original (simpler) mechansim without class tags.
+%From a perspective of object-oriented design, this looks as if every object has a \emph{type} instance variable.
 
 \paragraph{Class Tags}
-To support polymorphic expressions, we extend the idea of class-specific object IDs as follows. The following mechanism is applied only if the type of an expression or variable cannot be uniquely inferred. Otherwise, the previously described (non-extended) mechanism is applied. 
+The type inference engine uses union types for polymorphic expressions and ignores inheritance relationships. A value of a union type is represented by a tuple (C++ struct) of the object ID and a \emph{class tag}. A class tag is a unique \texttt{int} identifier for a certain class. Method calls are compiled to switch-case statements on the class tag.
+%Class tags are used for object references and for method calls. A Ruby variable is now represented by two CUDA \texttt{int} variables: one for the class tag and one for the object ID. Similarly, when passing an object as an argument, the same two arguments are passed in the generated CUDA code.
 
-Whenever an object ID was previously used, we now use a tuple of object ID and \emph{class tag}. A class tag is a unique \texttt{int} identifier for a certain class. Class tags are used for object references and for method calls. A Ruby variable is now represented by two CUDA \texttt{int} variables: one for the class tag and one for the object ID. Similarly, when passing an object as an argument, the same two arguments are passed in the generated CUDA code.
-
-Before dispatching to a method, the generated CUDA code (Figure~\ref{fig:listing_cuda_main}) determines the type of the receiver in a switch statement to select the corresponding instance method. In the following example, two arrays (agent tags and agent IDs) are passed to the kernel function. The device function representing the block invokes the correct instance method.
+In the example in Figure~\ref{fig:listing_cuda_main}, an array for objects of a union type is passed to the kernel function. The device function representing the block invokes the correct instance method. This example is a simplified one without any synchronization between threads (see Section~\ref{sec:gen_new_obj}).
 
 \lstset{language=C++}
 \begin{figure}[!htp]
 \begin{lstlisting}
-<@\textbf{\_\_global\_\_ void}@> kernel(<@\textbf{int}@> *jobs, <@\textbf{int}@> *agent_tag, <@\textbf{int}@> *agent_id, <@\textbf{int}@> weather)
+<@\textbf{\_\_global\_\_ void}@> kernel(<@\textbf{int}@> *jobs, <@\textbf{struct utype}@> *agent, <@\textbf{int}@> weather, <@\textbf{int}@> ticks)
 {
   <@\textbf{int}@> tid = blockIdx.x * blockDim.x + threadIdx.x;
-  block(agent_tag[jobs[id]], agent_id[jobs[id]], weather);
+  block(agent[jobs[id]], weather, ticks);
 }
 
-<@\textbf{\_\_device\_\_ void}@> block(<@\textbf{int}@> agent_tag, <@\textbf{int}@> agent_id, <@\textbf{int}@> weather)
+<@\textbf{\_\_device\_\_ void}@> block(<@\textbf{struct utype}@> agent, <@\textbf{int}@> weather, <@\textbf{int}@> ticks)
 {
   <@\textbf{for}@> (<@\textbf{int}@> i = 0; i <= ticks; i++)
   {
-    <@\textbf{switch}@> (agent_tag)
+    <@\textbf{switch}@> (agent.tag)
     {
       <@\textbf{case}@> TAG_Car:
-        method_Car_move(agent_id, weather);
+        method_Car_move(agent.id, weather);
         <@\textbf{break}@>;
       <@\textbf{case}@> TAG_Pedestrian:
-        method_Pedestrian_move(agent_id, weather);
+        method_Pedestrian_move(agent.id, weather);
         <@\textbf{break}@>;
-      <@\textbf{default}@>:
-        <@\textit{/* same mechanism to dispatch to method\_missing */}@>
     }
   }
 }
@@ -371,21 +369,18 @@ Before dispatching to a method, the generated CUDA code (Figure~\ref{fig:listing
 \label{fig:listing_cuda_main}
 \end{figure}
 
-\paragraph{Object Layout}
-In the light of class tags, we extend the SoA object layout as follows. If Ikra cannot infer the type of an instance variable unambiguously, two arrays are created for that instance variable: one for the class tag and one for the object ID.
-
 \paragraph{Subtyping}
-In terms of type inference, subclasses are treated as entirely different types instead of subtypes. For example, if type inference determines that the type of a variable can be \texttt{Car} or \texttt{Pedestrian}, the type of that variable is the set $\{\texttt{Car}, \texttt{Pedestrian}\}$ instead of \texttt{Agent}. In this case, the type dispatch statements for a method call contains can handle only \texttt{Car} and \texttt{Pedestrian}, but not, for example, \texttt{Bus}, which is also a subclass of \texttt{Agent}. If a method is only implemented in a superclass (e.g., \texttt{Agent}), but not in the receiver's class itself (e.g., \texttt{Car}), the generated code can dispatch to that method directly; that case can be detected at translation time. In addition to the object ID of the \texttt{self} (receiver) object, its class tag is also passed as an argument during method calls.
+%In terms of type inference, subclasses are treated as entirely different types instead of subtypes. For example, if type inference determines that the type of a variable can be \texttt{Car} or \texttt{Pedestrian}, the type of that variable is the set $\{\texttt{Car}, \texttt{Pedestrian}\}$ instead of \texttt{Agent}. In this case, the type dispatch statements for a method call contains can handle only \texttt{Car} and \texttt{Pedestrian}, but not, for example, \texttt{Bus}, which is also a subclass of \texttt{Agent}. If a method is only implemented in a superclass (e.g., \texttt{Agent}), but not in the receiver's class itself (e.g., \texttt{Car}), the generated code can dispatch to that method directly; that case can be detected at translation time. In addition to the object ID of the \texttt{self} (receiver) object, its class tag is also passed as an argument during method calls.
 
-Instance variables are stored together with the first class in the superclass hierarchy, in which they were used for the first time. For example, \texttt{@street} is stored as an array of class (structure) \texttt{Agent}. Subclasses and superclass share the same IDs. If an object is an instance of a different subclass, the corresponding array values are \emph{null} values~\cite{Mattis:2015:COI:2814228.2814230}. For example, if object 15 is a \texttt{Pedestrian}, then $A_{\texttt{Car}, \texttt{@max\_velocity}}[15]$ is null.
+Instance variables are stored together with the root class (after \texttt{Object}) in the superclass hierarchy. This allows subclasses and superclass to share the same IDs, making it possible to perform \texttt{super} calls without translating the object ID. For example, \texttt{@street} is stored as an array of class \texttt{Agent}. If an object is an instance of a different subclass, the corresponding array values are \emph{null} values~\cite{Mattis:2015:COI:2814228.2814230}. For example, if object 15 is a \texttt{Pedestrian}, then $A_{\texttt{Car}, \texttt{@max\_velocity}}[15]$ is null.
 
 \subsection{Read/write Analysis for Instance Variables}
 \label{sec:impl_copyback}
-As part of type inference, Ikra analyzes if an instance variable is read and/or written. Only instance variables that are read or written are transferred to the GPU. Only instance variables that are written are transferred back to the Ruby side directly after kernel invocation. Ikra performs a may-be-read/may-be-written analysis, which can have false positives in case the type of an expression cannot be determined accurately. Ikra does not copy single instance variable values, but entire arrays.
+As part of type inference, Ikra analyzes if an instance variable is read and/or written. Only instance variables that are read or written are transferred to the GPU. Only instance variables that are written are transferred back to the Ruby side directly after kernel invocation. Ikra performs a may-be-read/may-be-written analysis, which can have false positives in case the type of an expression cannot be determined accurately.
 
 \subsection{Object Tracer}
 \label{sec:impl_tracer}
-The object tracer is responsible for generating a set of objects that must be transferred to the GPU before kernel invocation. It starts with a set of root objects: all elements of the base array and lexical variables. Then, it traverses the object graph by following all instance variables. However, an instance variable value is visited only if that variable is read or written inside the parallel section. The entire process of tracing the object graph and assigning unique object IDs is similar to the \emph{system tracer} component in Smalltalk~\cite{Krasner:1983:SBH:226}.
+The object tracer generates a set of objects that must be transferred to the GPU before kernel invocation. It starts with a set of root objects: all elements of the base array and lexical variables. Then, it traverses the object graph by following all instance variables that are read or written inside the parallel section. 
 
 \section{Preliminary Benchmarks}
 To evaluate our optimizations, we conducted a series of hand-written benchmarks using the traffic simulation example\footnote{\texttt{git@github.com:matthias-springer/array2016-paper.git}}. We ran benchmarks on the TSUBAME supercomputer\footnote{\url{http://tsubame.gsic.titech.ac.jp/}} on a \emph{thin} compute node with two Intel Xeon X5670 CPUs (2.93~GHz $\times$ 6 cores each), 54~GB RAM, and an nVidia Tesla K20Xm GPU, running Linux \texttt{3.0.76-0.11-default x86\_64}, CUDA 7.0.27, and Ruby 1.9.3p448.
@@ -429,7 +424,7 @@ The running time for transferring data to the GPU and generating the CUDA code i
 \section{Related Work}
 Columnar (SoA) data layouts are known to be superior compared to row-based data layouts for certain kinds of database queries (e.g., OLAP queries)~\cite{Plattner:2009:CDA:1559845.1559846}, and especially for GPU-powered databases~\cite{Bakkum:2010:ASD:1735688.1735706}. In fact, one of the benefits of column stores for CPU-based database systems is \emph{prefetching}, which is similar to coalescing on GPUs, but without the parallel aspect. Columnar data layouts have also been evaluated for object-oriented programming languages. Mattis et al. have implemented a columnar object layout in Pypy to increase the performance of analytical queries~\cite{Mattis:2015:COI:2814228.2814230}. Ikra essentially uses the same columnar object layout, but extended to polymorphic types.
 
-A number of different techniques exist for avoiding branch divergence, e.g., detecting and delaying divergent branches at runtime in order to execute them at a later time~\cite{88d22b7f17}, or factoring out instructions that are common to two (divergent) branches~\cite{Han:2011:RBD:1964179.1964184}. A different approach is to reorder jobs, either with a reordering array (which is what Ikra does) or by physically changing the order of the jobs in the base array. Both techniques can be combined to increase memory coalescing~\cite{Zhang:2011:OED:1950365.1950408} (physically reordering data, then using a reordering array to restore the original semantics), but detailed knowledge about memory access patterns is required. Previous work has also investigated how the overhead of these transformations can be hidden using a CPU-GPU pipelining scheme~\cite{Zhang:2010:SGA:1810085.1810104}, if done at runtime in order to react to changes.
+A number of different techniques exist for avoiding branch divergence. Most of them are proposed at application-level, while Ikra aims at enabling a similar technique at the language level. For example, one technique is to detect and delay and delaying divergent branches at runtime in order to execute them at a later time~\cite{88d22b7f17}, or factoring out instructions that are common to two (divergent) branches~\cite{Han:2011:RBD:1964179.1964184}. A different approach is to reorder jobs, either with a reordering array (which is what Ikra does) or by physically changing the order of the jobs in the base array. Both techniques can be combined to increase memory coalescing~\cite{Zhang:2011:OED:1950365.1950408} (physically reordering data, then using a reordering array to restore the original semantics), but detailed knowledge about memory access patterns is required. Previous work has also investigated how the overhead of these transformations can be hidden using a CPU-GPU pipelining scheme~\cite{Zhang:2010:SGA:1810085.1810104}, if done at runtime in order to react to changes.
 
 Ishizaki et al. presented a framework for executing lambda expression used with the parallel streams API in Java~8 programs on nVidia GPUs~\cite{ishizaki2015compiling}. Their approach is to generate LLVM intermediate code (IR) from Java bytecode, which is in our opinion superior to Ikra's approach of performing a Ruby-to-CUDA source-code-to-source-code transformation from an engineering point of view. Future versions of Ikra might generate LLVM IR code from YARV bytecode~\cite{Sasada:2005:YYR:1094855.1094912}. Further optimizations of their Java~8 compiler include a check for array aliasing (which is what Ikra's object tracer does implicitly) and utilizing a read-only cache. Their implementation supports virtual method calls using direct devirtualization if the receiver type can be uniquely determined at compile time, or guarded devirtualization, executing an iteration on the GPU if the guard fails; in either case, the GPU code must only be able to handle monomorphic method calls. Ikra's code generator applies direct devirtualization, i.e., it does not generate type dispatch statements if the receiver type can be inferred unambiguously. Otherwise, it generates CUDA code that dispatches to the correct method based on class tags.
 
@@ -454,7 +449,7 @@ As another example, it is currently not possible to add or remove elements from 
 
 Ikra does currently not expose CUDA synchronization constructs~\cite{gpusync} or atomic operations. However, these constructs are necessary if computations between two threads are not independent.
 
-\balance
+%\balance
 
 \subsection{Nested Loops}
 \label{sec:nested_loops}
@@ -492,14 +487,17 @@ We presented Ikra, a dynamic Ruby-to-CUDA compiler for array-based parallel oper
 
 % We recommend abbrvnat bibliography style.
 
+
+
+\bibliographystyle{plain}
+\bibliography{array2016}
+
 \appendix
 \section{Appendix: Algorithm Pseudo Code}
 \label{sec:appendix_job_reorder}
 \label{sec:appendix_obj_tracer}
 
 Algorithm~1 shows the pseudo code for generating the job reordering array. The parameters $\mathit{base}$ and $W$ are the base array and the warp size. Algorithm~2 shows the pseudo code for tracing objects and generating the structure-of-arrays object layout. The parameters $\mathit{base}$ and $\mathit{lexical}$ are object tracer roots, and $\mathit{IV}$ is a map of read/written instance variables per class (determined during type inference).
-
-
 
 \begin{algorithm}[!h]
 \caption{Job Reordering}
@@ -566,23 +564,8 @@ Algorithm~1 shows the pseudo code for generating the job reordering array. The p
     \EndFor
 \EndFor
 \State \mbox{\textit{\textcolor{gray}{(Array case omitted)}}}
-%\ForAll{$c \in H.\mbox{keys}.\mbox{filter}(\mbox{Array})$}
-%    \State $A_{c,\mathit{size}} \gets \mbox{Array.new}(M[c])$
-%    \State $A_{c,\mathit{ofs}} \gets \mbox{Array.new}(M[c])$
-%    \State $A_{c,\mathit{arr}} \gets \mbox{Array.new}(\mbox{\textit{\textcolor{gray}{(size of all arrays)}}})$
-%
-%    \ForAll{$(\mathit{obj}, \mathit{id}) \in H[c]$}
-%        \State $A_{c, \mathit{size}}[\mathit{id}] \gets |\mathit{obj}|$
-%        \State $A_{c, \mathit{ofs}}[\mathit{id}] \gets A_{c, \mathit{ofs}}[\mathit{id} - 1] + A_{c, \mathit{size}}[\mathit{id} - 1]$
-%        \State $\mbox{\textcolor{gray}{\textit{(copy over array into slots $[\mathit{ofs}$; $\mathit{ofs} + \mathit{size}[$)}}}$
-%    \EndFor
-%\EndFor
-
 \EndProcedure
 \end{algorithmic}
 \end{algorithm}
-
-\bibliographystyle{plain}
-\bibliography{array2016}
 
 \end{document}
