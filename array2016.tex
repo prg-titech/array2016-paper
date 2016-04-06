@@ -180,7 +180,7 @@ With the availability and affordability of powerful GPUs, general purpose comput
 The goal of the Ikra project is to make GPU programming available to developers who are not familiar with the details of GPUs and their programming languages. Ikra is a library for Ruby that translates parallel sections to CUDA code and executes them in parallel on GPUs. It extends our previous work~\cite{Masuhara:2012:DER:2237887.2237888} with a dynamic compilation approach to allow for a larger number of optimizations and tighter integration with Ruby. To that end, Ikra also supports polymorphic expressions and variables, allowing programmers to write Ruby code in a \emph{natural} way, i.e., programmers should be able to write the same source code that they would write in a standard Ruby environment. We target the Ruby programming language because it provides powerful mechanisms for embedding DSLs in the language, which will be useful for future work.
 
 \section{Example: Agent-based Traffic Simulation}
-A simple object-oriented agent-based traffic simulation will serve as a running example in this paper. The basic idea is to simulate the behavior of a number of agents~\cite{Helbing2012} (e.g., cars, buses, pedestrians, etc.), given a street network as a directed graph (Figure~\ref{fig:running_example}) in adjacency list representation. Every agent is located on one street. Every street has a \emph{length} attribute and every agent has a \emph{progress} attribute representing the distance from the beginning of the street. Once these two attributes have the same value, the agent reached an intersection and should be moved to a different street (or make a U-turn if there is no other neighboring street).
+A simple object-oriented, agent-based traffic simulation will serve as a running example in this paper. The basic idea is to simulate the behavior of a number of agents~\cite{Helbing2012} (e.g., cars, buses, pedestrians, etc.), given a street network as a directed graph (Figure~\ref{fig:running_example}) in adjacency list representation. Every agent is located on one street. Every street has a \emph{length} attribute and every agent has a \emph{progress} attribute representing the distance from the beginning of the street. Once these two attributes have the same value, the agent reached an intersection and should be moved to a different street (or make a U-turn if there is no other neighboring street).
 
 \begin{figure}[!htp]
     \centering
@@ -248,97 +248,11 @@ Parallel array operations (except for \texttt{peach}) are executed symbolically 
 
 Ikra performs \emph{kernel fusion}~\cite{Wu:2012:KWA:2457472.2457490, Wahib:2014:SKF:2683593.2683615}, i.e., cascaded parallel operations are merged into a single CUDA kernel to avoid reading/writing intermediate results from/to the global memory. Instead, they can be kept in registers. The process of merging two parallel blocks is not relevant in the scope of this paper and omitted.
 
-\subsection{Job Reordering}
-Before kernel invocation, Ikra analyzes all elements in the base array and reorders them according to their type. This is useful to avoid \emph{branch divergence}, which can penalize performance when running programs on GPUs.
-
-\paragraph{Branch Divergence}
-In contrast to most CPU-based systems\footnote{There are CPU extensions for SIMD computations, e.g., SSE.}, GPU-based systems are SIMD (single instruction, multiple data) systems. A GPU consists of a number of streaming multiprocessors. Such a processor has a single control unit that fetches and decodes instructions, but multiple arithmetic logic units (ALUs). Therefore, every instruction is executed in parallel on multiple chunks of data. Every ALU corresponds to one thread, but all threads that are executing on the same streaming multiprocessor must follow the same control flow. In case two threads take a different branch, their execution is serialized until the control flow merges again. Consequently, threads/jobs should be mapped to streaming multiprocessors in such a way that the control flow is unlikely to divergence among one such thread group (threads executing on one streaming multiprocessor).
-
-In CUDA, such a thread group is called \emph{warp} and has a size of 32. CUDA programmers try to write their programs such that each consecutive group of 32 threads follows the same control flow.
-
-\paragraph{Thread Allocation}
-Ikra tries to avoid branch divergence due to polymorphic method calls on array elements by allocating jobs to warps automatically based on runtime type information. Polymorphic method calls are compiled to conditional branches (an example is shown in Figure~\ref{fig:listing_cuda_main}). Before kernel invocation, Ikra generates a \emph{job reordering array}, such that the base array is sorted according the elements' types (Figure~\ref{fig:ex_job_reorder}). Ikra does not actually change the order of elements in the base array to ensure that other parts of the program outside of the parallel section are not affected.
-
-\begin{figure}[!htp]
-    \centering
-    \includegraphics[width=\columnwidth]{reorder_example.pdf}
-    \caption{Example: Job Reordering (assuming warp size 4).}
-    \label{fig:ex_job_reorder}
-\end{figure}
-
-During job reordering the number of threads can increase as shown in Figure~\ref{fig:ex_job_reorder}. Jobs are reordered in such a way that no two elements of different types are allocated in the same warp. If the number of jobs of a particular type is not a multiple of the warp size, the last warp will not be filled up entirely, but some threads will not have a job, i.e., they are not \emph{no operation} threads. This might seem like a waste of computing power, but we expect the number of different types to be small (3 in this example).
-
-The job reordering array can be computed in linear time by scanning all elements of the base array twice. The algorithm is similar to counting sort and bucket sort~\cite{Corwin:2004:SLT:1040231.1040257}. It generates one array of indices per type (class) and concatenates these arrays, making sure that every new array starts at a multiple of the warp size (see Algorithm~1 in Section~\ref{sec:appendix_job_reorder}).
-
-\subsection{Structure-of-Arrays Representation}
-In traditional programming languages and virtual machines, an array of objects is typically represented an array of structures, i.e., every object is a contiguous chunk of data in the memory. However, it is common practice in GPU programming to work with multiple arrays of structure fields (\emph{structure-of-arrays}) instead of one array of structures (\emph{array-of-structures}) for coalescing field accesses~\cite{Mei2016, Abel:1999:ATS}.
-
-\paragraph{Memory Coalescing}
-Global memory is one of the main bottlenecks of GPUs. One approach is to aim for memory access patterns where memory that is accessed in parallel by a number of threads is spatially local. Such memory accesses can be coalesced, i.e., the GPU can process such accesses in a single request, alleviating the global memory bottleneck.
-
-Since a GPU is a SIMD system, all threads within a warp have to execute the same instruction at a time. Consequently, if one thread accesses an instance variable, then all other threads within the same warp access the same instance variable (or block because of branch divergence), probably in a different object. In this situation, a structure-of-arrays layout is superior to an array-of-structures layout, because parallel accesses to the same instance variable are more likely to be spatially local (Figure~\ref{fig:ex_obj_layout}).
-
-\begin{figure}[!htp]
-    \centering
-    \subfloat[Array-of-Structures (AoS) Layout (uncoalesced)]{{\includegraphics[width=0.75\columnwidth]{column_access_1.pdf} }}%
-    
-    \subfloat[Structure-of-Arrays (SoA) Layout (maybe coalesced)]{{\includegraphics[width=0.75\columnwidth]{column_access_2.pdf} }}%
-    \caption{Example: AoS and SoA Object Layout. Boxes represent instance variables. Arrows indicate parallel access.}
-    \label{fig:ex_obj_layout}%
-\end{figure}
-
-\paragraph{Generating Structure of Arrays}
-In the following, we present a first approach for representing objects as a structure of arrays. For the moment, we assume that all variables and expressions are monomorphic (there are also no subtypes). This approach will be extended in the light of polymorphic expressions in the next section.
-
-After running the object tracer, we know which objects should be transferred to the GPU. Objects are grouped by class and assigned class-specific IDs, which are used as indices into the newly-created structure of arrays (similar to the \emph{system tracer} in Smalltalk~\cite{Krasner:1983:SBH:226}).
-
-\begin{enumerate}
-    \item Group objects by their class $c$, resulting in arrays $O_c$.
-    \item Assign an ID to every object for all $O_c$, starting from $0$ in every $O_c$, IDs being consecutive. This results in a hash map $H_c$ mapping objects to class-specific IDs.
-    \item For every instance variable $v$ of every class $c$, create an array $A_{c,v}$ of size $m + 1$, where $m$ is the maximum ID in $O_c$. The base type of the array is the type of the instance variable if it is primitive, or \texttt{int} otherwise (referencing other non-primitive objects via their IDs).
-    \item For every object $o$ with class $c$ and ID $H_c[o]$, store every instance variable $v$ in the corresponding array slot $A_{c, v}[H_c[o]]$. If the instance variable is non-primitive, look up its ID and store it.
-\end{enumerate}
-
-Note that after this transformation, the base type of the base array that is passed to the kernel, is \texttt{int} and contains object IDs if it contains non-primitive objects.
-
-In our implementation, the object tracer is combined with the SoA generator. A pseudo code implementation which was also used for benchmarks is shown in Section~\ref{sec:appendix_obj_tracer}.
-
-\paragraph{Source Code Transformation}
-Since objects are now represented as a structure of arrays, Ikra must generate different source code for reading from or writing to instance variables. We continue to assume that all expressions and variables are monomorphic. Moreover, we do not consider generating new objects at this time (see Section~\ref{sec:gen_new_obj}).
-
-In the following, we consider reading/writing instance variables of an object and calling methods on an object, where the object is identified by its type $c$ and its ID $i$. Whenever objects are passed around, Ikra actually generates source code that passes their IDs around. Passing type information is not necessary, because we assume that we know the type of every expression and variable\footnote{We consider subclasses to be an entirely different type in this section.}.
-
-Reading an instance variable $v$ of object $o$ with type $c$ and ID $i$ translates to reading the array $A_{c,v}[i]$. Writing an instance variable translates to writing into the same array slot.
-
-Every instance method is translated to a device function, where the type $c$ is mangled into its name and the first parameter has type \texttt{int} and represents the ID of \texttt{self} object. Whenever Ikra encounters a method call during code translation, it determines the receiver's type and generates a call to the appropriate device function.
-
-\paragraph{Representation of Arrays}
-The previously-described SoA object layout works well with equally-sized objects, but not for arrays, which are variable-sized objects. For example, the instance variable \texttt{@neighbors} of class \texttt{Street} is an array of streets.
-
-Ikra effectively represents such $n:m$ relationships as join tables~\cite{Garcia-Molina:2008:DSC:1450931} that are \emph{collapsed}. Such a table is sorted by object IDs for $n$. Furthermore, the $n$ array (column) is not stored as a full array but as RLE tuples~\cite{Abadi:2006:ICE:1142473.1142548} consisting of an implicit ID for $n$, a start offset into the $m$ array, and a length value, distributed among multiple columns. RLE tuples are a well-known optimization in column databases.
-
-\begin{figure}[!htp]
-    \centering
-    \includegraphics[width=\columnwidth]{column_access.pdf}
-    \caption{Example: Array Representation for \texttt{@neighbors} ($n:m$ relationship). $(\texttt{Street.ID}, \texttt{Array.offset}, \texttt{Array.size})$ is an RLE tuple~\cite{Abadi:2006:ICE:1142473.1142548}.}
-    \label{fig:array_repr}
-\end{figure}
-
-From an implementation point of view, an array is an ordinary object with an offset and a size attribute. The offset attribute points into a single large array containing the contents of all arrays. This layout might change in future versions of Ikra (see Section~\ref{sec:gen_new_obj}).
-
-%One approach to alleviate that problem is to aim for a high occupancy to hide memory latency, i.e., running a high number of threads, such that the GPU can switch execution to another warp while the current thread is blocking. Another optimization is to aim for coalesced mem
-
 \subsection{Polymorphic Expressions}
 \label{sec:polymorphic}
-%In contrast to CUDA, Ruby is a dynamically-typed programming language.  For this reason, Ikra should also support Ruby expressions whose types cannot be inferred unambiguously at translation time.
-Ikra embeds polymorphic types into CUDA's static type system using type tags~\cite{Abadi:1989:DTS:75277.75296} for receivers whose types cannot be inferred unambiguously. This is an extension of the previously-described concept. Monomorphic expressions rely on the original (simpler) mechansim without class tags.
-%From a perspective of object-oriented design, this looks as if every object has a \emph{type} instance variable.
+In Ikra, non-primitive object references are represented by an ID (pointer). Polymorphic types (also types that are not in a subtype relationship) are embedded into CUDA's static type system using class tags~\cite{Abadi:1989:DTS:75277.75296}. The type inference engine uses union types for polymorphic expressions and ignores inheritance relationships. A value of a union type is represented by a tuple (C++ struct) of the object ID and a \emph{class tag}. A class tag is a unique \texttt{int} identifier for a certain class. Method calls with polymorphic receiver types are compiled to switch-case statements on the class tag.
 
-\paragraph{Class Tags}
-The type inference engine uses union types for polymorphic expressions and ignores inheritance relationships. A value of a union type is represented by a tuple (C++ struct) of the object ID and a \emph{class tag}. A class tag is a unique \texttt{int} identifier for a certain class. Method calls are compiled to switch-case statements on the class tag.
-%Class tags are used for object references and for method calls. A Ruby variable is now represented by two CUDA \texttt{int} variables: one for the class tag and one for the object ID. Similarly, when passing an object as an argument, the same two arguments are passed in the generated CUDA code.
-
-In the example in Figure~\ref{fig:listing_cuda_main}, an array for objects of a union type is passed to the kernel function. The device function representing the block invokes the correct instance method. This example is a simplified one without any synchronization between threads (see Section~\ref{sec:gen_new_obj}).
+Figure~\ref{fig:listing_cuda_main} shows the main loop of the traffic simulation example and will be also be used to explain concepts in the following sections. An array of cars and pedestrians is passed to the kernel function as an array of union type structs. The device function representing the block invokes the correct instance method. This example is a simplified one without any synchronization between threads (see Section~\ref{sec:gen_new_obj}).
 
 \lstset{language=C++}
 \begin{figure}[!htp]
@@ -369,10 +283,87 @@ In the example in Figure~\ref{fig:listing_cuda_main}, an array for objects of a 
 \label{fig:listing_cuda_main}
 \end{figure}
 
-\paragraph{Subtyping}
-%In terms of type inference, subclasses are treated as entirely different types instead of subtypes. For example, if type inference determines that the type of a variable can be \texttt{Car} or \texttt{Pedestrian}, the type of that variable is the set $\{\texttt{Car}, \texttt{Pedestrian}\}$ instead of \texttt{Agent}. In this case, the type dispatch statements for a method call contains can handle only \texttt{Car} and \texttt{Pedestrian}, but not, for example, \texttt{Bus}, which is also a subclass of \texttt{Agent}. If a method is only implemented in a superclass (e.g., \texttt{Agent}), but not in the receiver's class itself (e.g., \texttt{Car}), the generated code can dispatch to that method directly; that case can be detected at translation time. In addition to the object ID of the \texttt{self} (receiver) object, its class tag is also passed as an argument during method calls.
+\subsection{Job Reordering}
+Before kernel invocation, Ikra analyzes all elements in the base array and reorders them according to their type. This is useful to avoid \emph{branch divergence}, which can penalize performance when running programs on GPUs.
 
-Instance variables are stored together with the root class (after \texttt{Object}) in the superclass hierarchy. This allows subclasses and superclass to share the same IDs, making it possible to perform \texttt{super} calls without translating the object ID. For example, \texttt{@street} is stored as an array of class \texttt{Agent}. If an object is an instance of a different subclass, the corresponding array values are \emph{null} values~\cite{Mattis:2015:COI:2814228.2814230}. For example, if object 15 is a \texttt{Pedestrian}, then $A_{\texttt{Car}, \texttt{@max\_velocity}}[15]$ is null.
+\paragraph{Branch Divergence}
+In contrast to most CPU-based systems\footnote{There are CPU extensions for SIMD computations, e.g., SSE.}, GPU-based systems are SIMD (single instruction, multiple data) systems. A GPU consists of a number of streaming multiprocessors. Such a processor has a single control unit that fetches and decodes instructions, but multiple arithmetic logic units (ALUs). Therefore, every instruction is executed in parallel on multiple chunks of data. Every ALU corresponds to one thread, but all threads that are executing on the same streaming multiprocessor must follow the same control flow. In case two threads take a different branch, their execution is serialized until the control flow merges again. Consequently, threads/jobs should be mapped to streaming multiprocessors in such a way that the control flow is unlikely to divergence among one such thread group (threads executing on one streaming multiprocessor).
+
+In CUDA, such a thread group is called \emph{warp} and has a size of 32. CUDA programmers try to write their programs such that each consecutive group of 32 threads follows the same control flow.
+
+\paragraph{Thread Allocation}
+Ikra tries to avoid branch divergence due to polymorphic method calls on array elements by allocating jobs to warps automatically based on runtime type information. Before kernel invocation, Ikra generates a \emph{job reordering array} (see \texttt{jobs} parameter in Figure~\ref{fig:listing_cuda_main}), such that the base array is sorted according the elements' types (Figure~\ref{fig:ex_job_reorder}). Ikra does not actually change the order of elements in the base array to ensure that other parts of the program outside of the parallel section are not affected.
+
+\begin{figure}[!htp]
+    \centering
+    \includegraphics[width=\columnwidth]{reorder_example.pdf}
+    \caption{Example: Job Reordering (assuming warp size 4).}
+    \label{fig:ex_job_reorder}
+\end{figure}
+
+During job reordering the number of threads can increase as shown in Figure~\ref{fig:ex_job_reorder}. Jobs are reordered in such a way that no two elements of different types are allocated in the same warp. If the number of jobs of a particular type is not a multiple of the warp size, the last warp will not be filled up entirely, but some threads will not have a job, i.e., they are not \emph{no operation} threads. This might seem like a waste of computing power, but we expect the number of different types to be small (3 in this example).
+
+The job reordering array can be computed in linear time by scanning all elements of the base array twice. The algorithm is similar to counting sort and bucket sort~\cite{Corwin:2004:SLT:1040231.1040257}. It generates one array of indices per type (class) and concatenates these arrays, making sure that every new array starts at a multiple of the warp size (see Algorithm~1 in Section~\ref{sec:appendix_job_reorder}).
+
+\subsection{Structure-of-Arrays Representation}
+In traditional programming languages and virtual machines, an array of objects is typically represented an array of structures, i.e., every object is a contiguous chunk of data in the memory. However, it is common practice in GPU programming to work with multiple arrays of structure fields (\emph{structure-of-arrays}) instead of one array of structures (\emph{array-of-structures}) for coalescing field accesses~\cite{Mei2016, Abel:1999:ATS}.
+
+\paragraph{Memory Coalescing}
+Global memory is one of the main bottlenecks of GPUs. One approach is to aim for memory access patterns where memory that is accessed in parallel by a number of threads is spatially local. Such memory accesses can be coalesced, i.e., the GPU can process such accesses in a single request, alleviating the global memory bottleneck.
+
+Since a GPU is a SIMD system, all threads within a warp have to execute the same instruction at a time. Consequently, if one thread accesses an instance variable, then all other threads within the same warp access the same instance variable (or block because of branch divergence), probably in a different object. In this situation, a structure-of-arrays layout is superior to an array-of-structures layout, because parallel accesses to the same instance variable are more likely to be spatially local (Figure~\ref{fig:ex_obj_layout}).
+
+\begin{figure}[!htp]
+    \centering
+    \subfloat[Array-of-Structures (AoS) Layout (uncoalesced)]{{\includegraphics[width=0.75\columnwidth]{column_access_1.pdf} }}%
+    
+    \subfloat[Structure-of-Arrays (SoA) Layout (maybe coalesced)]{{\includegraphics[width=0.75\columnwidth]{column_access_2.pdf} }}%
+    \caption{Example: AoS and SoA Object Layout. Boxes represent instance variables. Arrows indicate parallel access.}
+    \label{fig:ex_obj_layout}%
+\end{figure}
+
+\paragraph{Generating Structure of Arrays}
+In the following, we present a first approach for representing objects as a structure of arrays. After running the object tracer, we know which objects should be transferred to the GPU. Objects are grouped by class and assigned class-specific IDs, which are used as indices into the newly-created structure of arrays (similar to the \emph{system tracer} in Smalltalk~\cite{Krasner:1983:SBH:226}).
+
+\begin{enumerate}
+    \item Group objects by their class $c$, resulting in arrays $O_c$.
+    \item Assign an ID to every object for all $O_c$, starting from $0$ in every $O_c$, IDs being consecutive. This results in a hash map $H_c$ mapping objects to class-specific IDs.
+    \item For every instance variable $v$ of every class $c$, create an array $A_{c,v}$ of size $m + 1$, where $m$ is the maximum ID in $O_c$. The base type of the array is the type of the instance variable if it is primitive, or \texttt{int} otherwise (referencing other non-primitive objects via their IDs).
+    \item For every object $o$ with class $c$ and ID $H_c[o]$, store every instance variable $v$ in the corresponding array slot $A_{c, v}[H_c[o]]$. If the instance variable is non-primitive, look up its ID and store it.
+\end{enumerate}
+
+Note that after this transformation, the base type of the base array that is passed to the kernel, contains object IDs (or the union type struct) if it consists of non-primitive objects (see \texttt{agent} parameter in Figure~\ref{fig:listing_cuda_main}). In our implementation, the object tracer is combined with the SoA generator.
+
+\paragraph{Source Code Transformation}
+Since objects are now represented as a structure of arrays, Ikra must generate different source code for reading from or writing to instance variables. We do not consider generating new objects at this time (see Section~\ref{sec:gen_new_obj}).
+
+In the following, we consider reading/writing instance variables of an object and calling methods on an object, where the object is identified by its type $c$ and its ID $i$ (or a union type struct). Whenever objects are passed around, Ikra generates source code that passes their IDs (or union type structs for polymorphic values) around.
+
+Reading/writing an instance variable $v$ of object $o$ with type $c$ and ID $i$ translates to reading/writing the array $A_{c,v}[i]$.
+
+Every instance method is translated to a device function, where the type $c$ is mangled into its name and the first parameter is the ID (or union type struct) of the \texttt{self} object. Whenever Ikra encounters a method call during code translation, it generates a call to the appropriate device function (or a switch-case statement for polymorphic expressions).
+
+\paragraph{Representation of Arrays}
+The previously-described SoA object layout works well with equally-sized objects, but not for arrays, which are variable-sized objects. For example, the instance variable \texttt{@neighbors} of class \texttt{Street} is an array of streets.
+
+Ikra effectively represents such $n:m$ relationships as join tables~\cite{Garcia-Molina:2008:DSC:1450931} that are \emph{collapsed}. Such a table is sorted by object IDs for $n$. Furthermore, the $n$ array (column) is not stored as a full array but as RLE tuples~\cite{Abadi:2006:ICE:1142473.1142548} consisting of an implicit ID for $n$, a start offset into the $m$ array, and a length value, distributed among multiple columns. RLE tuples are a well-known optimization in column databases.
+
+\begin{figure}[!htp]
+    \centering
+    \includegraphics[width=\columnwidth]{column_access.pdf}
+    \caption{Example: Array Representation for \texttt{@neighbors} ($n:m$ relationship). $(\texttt{Street.ID}, \texttt{Array.offset}, \texttt{Array.size})$ is an RLE tuple~\cite{Abadi:2006:ICE:1142473.1142548}.}
+    \label{fig:array_repr}
+\end{figure}
+
+From an implementation point of view, an array is an ordinary object with an offset and a size attribute. The offset attribute points into a single large array containing the contents of all arrays. This layout might change in future versions of Ikra (see Section~\ref{sec:gen_new_obj}).
+
+\paragraph{Polymorphism and Subtyping}
+%In terms of type inference, subclasses are treated as entirely different types instead of subtypes. For example, if type inference determines that the type of a variable can be \texttt{Car} or \texttt{Pedestrian}, the type of that variable is the set $\{\texttt{Car}, \texttt{Pedestrian}\}$ instead of \texttt{Agent}. In this case, the type dispatch statements for a method call contains can handle only \texttt{Car} and \texttt{Pedestrian}, but not, for example, \texttt{Bus}, which is also a subclass of \texttt{Agent}. If a method is only implemented in a superclass (e.g., \texttt{Agent}), but not in the receiver's class itself (e.g., \texttt{Car}), the generated code can dispatch to that method directly; that case can be detected at translation time. In addition to the object ID of the \texttt{self} (receiver) object, its class tag is also passed as an argument during method calls.
+Polymorphic values are represented as C++ structs containing a class tag and an object ID. Consequently, an array for an instance variable of polymorphic type stores union type structs instead of plain object IDs.
+
+Instance variables of subtypes are stored together with the root class (after \texttt{Object}) in the superclass hierarchy\footnote{We consider only classes that are used in the current parallel section.}. This allows subclasses and superclass to share the same IDs, making it possible to perform \texttt{super} calls without translating the object ID. For example, \texttt{@max\_velocity} is stored as if it belonged to \texttt{Agent}, i.e., $|A_{\texttt{Car}, \texttt{@max\_velocity}}| = |A_{\texttt{Agent}, \texttt{@progress}}|$, even though some of the agents are pedestrians. If an object is an instance of a different subclass, the corresponding array values are \emph{null} values~\cite{Mattis:2015:COI:2814228.2814230}. For example, if object 15 is a \texttt{Pedestrian}, then $A_{\texttt{Car}, \texttt{@max\_velocity}}[15]$ is null.
+
+%One approach to alleviate that problem is to aim for a high occupancy to hide memory latency, i.e., running a high number of threads, such that the GPU can switch execution to another warp while the current thread is blocking. Another optimization is to aim for coalesced mem
 
 \subsection{Read/write Analysis for Instance Variables}
 \label{sec:impl_copyback}
@@ -383,12 +374,12 @@ As part of type inference, Ikra analyzes if an instance variable is read and/or 
 The object tracer generates a set of objects that must be transferred to the GPU before kernel invocation. It starts with a set of root objects: all elements of the base array and lexical variables. Then, it traverses the object graph by following all instance variables that are read or written inside the parallel section. 
 
 \section{Preliminary Benchmarks}
-To evaluate our optimizations, we conducted a series of hand-written benchmarks using the traffic simulation example\footnote{\texttt{git@github.com:matthias-springer/array2016-paper.git}}. We ran benchmarks on the TSUBAME supercomputer\footnote{\url{http://tsubame.gsic.titech.ac.jp/}} on a \emph{thin} compute node with two Intel Xeon X5670 CPUs (2.93~GHz $\times$ 6 cores each), 54~GB RAM, and an nVidia Tesla K20Xm GPU, running Linux \texttt{3.0.76-0.11-default x86\_64}, CUDA 7.0.27, and Ruby 1.9.3p448.
+To evaluate our optimizations, we conducted a series of hand-written benchmarks using the traffic simulation example\footnote{\texttt{git@github.com:matthias-springer/array2016-paper.git}}. We ran benchmarks on the TSUBAME supercomputer\footnote{\url{http://tsubame.gsic.titech.ac.jp/}} on a \emph{thin} compute node with two Intel Xeon X5670 CPUs (2.93~GHz $\times$ 6 cores each), 54~GB RAM, and three nVidia Tesla K20Xm GPUs (only one used), running Linux \texttt{3.0.76-0.11-default x86\_64}, CUDA 7.0.27, and Ruby 1.9.3p448.
 
 We simulated 1,000,000 iterations of a random street network with 500 streets and random vertex out-degrees between 1 and 10, 4096 cars, and 16384 pedestrians. All benchmark running times are average values of 5 runs using the same random scenario.
 
 \paragraph{Kernel Execution}
-Figure~\ref{fig:bench_kernel} shows the kernel running time of the traffic simulation in various configurations. Figure~\ref{fig:bench_kernel}a shows the running time with a structure-of-arrays (SoA) layout, which is around 30\% faster than an array-of-structures (AoS) layout in Figure~\ref{fig:bench_kernel}b.
+Figure~\ref{fig:bench_kernel} shows the kernel running time of the traffic simulation in various configurations. Figure~\ref{fig:bench_kernel}a shows the running time with a structure-of-arrays (SoA) layout, which is around 30\% faster than an array-of-structures (AoS) layout in Figure~\ref{fig:bench_kernel}b. There are around 10 accesses to instance variables in each \texttt{move} method. The source code is omitted for brevity reasons in Figure~\ref{fig:listing_cuda_main}.
 
 \begin{figure}[!htp]
     \includegraphics[width=\columnwidth]{bench_1.pdf}
@@ -397,7 +388,7 @@ Figure~\ref{fig:bench_kernel} shows the kernel running time of the traffic simul
     \label{fig:bench_kernel}
 \end{figure}
 
-The objects involved in this example are quite small. Agents are represented by 32-byte structs (three instance variables and class tag) in an AoS layout, or three 4-byte arrays (class tag is passed as an argument) in a SoA layout, respectively. The GPU's L1 cache is 48~KB, with a cache line size of 128~bytes. To analyze the effect of caching, we ran the AoS benchmark with artificially enlarged object sizes (10/5 additional instance variables for agents/streets, resulting in an object size of 72~bytes/32~bytes, respectively; Figure~\ref{fig:bench_kernel}c). This configuration is interesting because the example code accesses all instance variables of an agent subsequently, diminishing the advantage of a SoA layout, because the entire object (and three subsequent objects) can be held in cache (prefetching). A SoA layout is around 60\% faster compared to this configuration.
+The objects involved in this example are quite small. Agents are represented by 32-byte structs (three instance variables and class tag) in an AoS layout, or three 4-byte arrays (class tag is passed as an argument) in a SoA layout, respectively. The GPU's L1 cache is 48~KB, with a cache line size of 128~bytes. To analyze the effect of prefetching, we ran the AoS benchmark with artificially enlarged object sizes (10/5 additional instance variables that are never read or written for agents/streets, resulting in an object size of 72~bytes/32~bytes, respectively; Figure~\ref{fig:bench_kernel}c). This configuration is interesting because the example code accesses all instance variables of an agent subsequently, diminishing the advantage of a SoA layout, because the entire object (and three subsequent objects) can be held in cache (prefetching). A SoA layout is around 60\% faster compared to this configuration.
 
 \paragraph{Job Reordering}
 Figure~\ref{fig:job_reorder_arr} shows the running time for generating the job reordering array (warp size 32). This is currently done in the Ruby interpreter but could be moved to the GPU side in future versions. The running time increases linearly with the number of elements in the base array. Changing the number of types (classes) has only a small effect on the running time. We assume that this number is much smaller than the number of elements. For the traffic simulation example, the running time for generating the job reordering array is neglectable.
@@ -410,7 +401,7 @@ Figure~\ref{fig:job_reorder_arr} shows the running time for generating the job r
 \end{figure}
 
 \paragraph{Tracing Objects and Generating Structure of Arrays}
-Figure~\ref{fig:tracing} shows the running time for tracing objects and generating the SoA layout (Algorithm~2) for the traffic simulation example. For the number of agents/streets that were used in the kernel benchmarks, the running time is neglectable. Moreover, in future plans for Ikra we want to perform this step only once and reuse data that was already processed and moved to the GPU earlier (see Section~\ref{sec:minimizing_dtr}).
+Figure~\ref{fig:tracing} shows the running time for tracing objects and generating the SoA layout for the traffic simulation example. For the number of agents/streets that were used in the kernel benchmarks, the running time is neglectable. Moreover, in future plans for Ikra we want to perform this step only once and reuse data that was already processed and moved to the GPU earlier (see Section~\ref{sec:minimizing_dtr}).
 
 \begin{figure}[!htp]
     \includegraphics[width=\columnwidth]{obj_tracer.pdf}
@@ -497,7 +488,7 @@ We presented Ikra, a dynamic Ruby-to-CUDA compiler for array-based parallel oper
 \label{sec:appendix_job_reorder}
 \label{sec:appendix_obj_tracer}
 
-Algorithm~1 shows the pseudo code for generating the job reordering array. The parameters $\mathit{base}$ and $W$ are the base array and the warp size. Algorithm~2 shows the pseudo code for tracing objects and generating the structure-of-arrays object layout. The parameters $\mathit{base}$ and $\mathit{lexical}$ are object tracer roots, and $\mathit{IV}$ is a map of read/written instance variables per class (determined during type inference).
+Algorithm~1 shows the pseudo code for generating the job reordering array. The parameters $\mathit{base}$ and $W$ are the base array and the warp size.
 
 \begin{algorithm}[!h]
 \caption{Job Reordering}
@@ -518,52 +509,6 @@ Algorithm~1 shows the pseudo code for generating the job reordering array. The p
     \State $\mathit{next} \gets \lceil \mathit{next} / W \rceil * W$
 \EndFor
 \State \Return $\mathit{result}$
-\EndProcedure
-\end{algorithmic}
-\end{algorithm}
-
-\begin{algorithm}[!h]
-\caption{Object Tracing and SoA Generation}
-\label{CHalgorithm}
-\begin{algorithmic}[1]
-\Procedure{TraceAndSoa}{base, lexical, IV}
-\State $\mathit{Q} \gets \mbox{Queue.new}(\mathit{base} \cup \mathit{lexical})$
-\State $H \gets \mbox{Hash.new}$ \hfill \textcolor{gray}{\textit{default value:} Hash.new}
-\State $M \gets \mbox{Hash.new}$ \hfill \textcolor{gray}{\textit{default value:} 0}
-\While{$|Q| > 0$}
-    \State $\mathit{next} \gets Q.\mbox{pop}()$
-    \State $c \gets \mathit{next}.\mbox{class}$
-    \If{$\neg c.\mbox{isPrimitive} \wedge \mathit{next} \not\in H[c].\mathit{keys}$}
-        \State $H[\mathit{next}] \gets M[c]$
-        \State $M[c] \gets M[c] + 1$
-        \If{$c == \mbox{Array}$}
-            \ForAll{$e \in \mathit{next}$}
-                \State $Q.\mbox{push}(e)$
-            \EndFor
-        \Else
-            \ForAll{$v \in \mathit{IV}[c]$}
-                \State $Q.\mbox{push}(\mathit{next}[v])$
-            \EndFor
-        \EndIf
-    \EndIf
-\EndWhile
-
-\ForAll{$c \in H.\mbox{keys}.\mbox{reject}(\mbox{Array<?>})$}
-    \ForAll{$v \in \mathit{IV}[c]$}
-        \State $A_{c,v} \gets \mbox{Array.new}(M[c])$
-    \EndFor
-
-    \ForAll{$(\mathit{obj}, \mathit{id}) \in H[c]$}
-        \ForAll{$v \in \mathit{IV}[c]$}
-            \If{$\mathit{obj}[v].\mbox{class}.\mbox{isPrimitive}$}
-                \State $A_{c,v}[\mathit{id}] \gets \mathit{obj}[v]$
-            \Else
-                \State $A_{c,v}[\mathit{id}] \gets H[\mathit{obj}[v].\mbox{class}][\mathit{obj}[v]]$
-            \EndIf
-        \EndFor
-    \EndFor
-\EndFor
-\State \mbox{\textit{\textcolor{gray}{(Array case omitted)}}}
 \EndProcedure
 \end{algorithmic}
 \end{algorithm}
