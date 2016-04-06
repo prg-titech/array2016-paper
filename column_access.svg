@@ -70,9 +70,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="1.3895385"
-     inkscape:cx="240.89903"
-     inkscape:cy="123.17412"
+     inkscape:zoom="0.9825521"
+     inkscape:cx="296.5021"
+     inkscape:cy="199.74018"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      showgrid="true"
@@ -108,7 +108,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -201,12 +201,12 @@
          style="font-size:17.5px">9</tspan></text>
     <path
        style="opacity:1;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1.5, 1.5;stroke-dashoffset:0;stroke-opacity:1"
-       d="m 139.5,162.60743 0,10"
+       d="m 139.7,162.60743 0,10"
        id="path4941"
        inkscape:connector-curvature="0" />
     <path
        style="opacity:1;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1.5, 1.5;stroke-dashoffset:0;stroke-opacity:1"
-       d="m 169.5,162.60743 0,10"
+       d="m 168.8,162.60743 0,10"
        id="path4943"
        inkscape:connector-curvature="0" />
     <rect
@@ -294,15 +294,15 @@
     <text
        xml:space="preserve"
        style="font-style:normal;font-weight:normal;font-size:40px;line-height:125%;font-family:Sans;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="489.46796"
+       x="489.26718"
        y="139.14062"
        id="text4973"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan4975"
-         x="489.46796"
+         x="489.26718"
          y="139.14062"
-         style="font-size:17.5px">2</tspan></text>
+         style="font-size:17.5px">3</tspan></text>
     <path
        inkscape:connector-curvature="0"
        id="path4977"
@@ -646,7 +646,7 @@
     <path
        inkscape:connector-curvature="0"
        id="path5119"
-       d="m 103.5,163.20742 0,10"
+       d="m 103.8,163.20742 0,10"
        style="opacity:1;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1.5, 1.5;stroke-dashoffset:0;stroke-opacity:1" />
     <rect
        style="opacity:1;fill:#e6e6e6;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:1.20000005;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
@@ -708,7 +708,7 @@
        inkscape:connector-curvature="0" />
     <path
        style="opacity:1;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1.5, 1.5;stroke-dashoffset:0;stroke-opacity:1"
-       d="m 378.49999,163.37038 0,10"
+       d="m 378.7,163.37038 0,10"
        id="path5143"
        inkscape:connector-curvature="0" />
     <rect
@@ -767,12 +767,12 @@
     <path
        inkscape:connector-curvature="0"
        id="path5167"
-       d="m 270.1,163.37039 0,10"
+       d="m 270.25,163.37039 0,10"
        style="opacity:1;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1.5, 1.5;stroke-dashoffset:0;stroke-opacity:1" />
     <path
        inkscape:connector-curvature="0"
        id="path5169"
-       d="m 300.1,163.37039 0,10"
+       d="m 299.3,163.37039 0,10"
        style="opacity:1;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1.5, 1.5;stroke-dashoffset:0;stroke-opacity:1" />
     <path
        style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#Arrow1Mend)"
@@ -868,12 +868,12 @@
     <path
        inkscape:connector-curvature="0"
        id="path5213"
-       d="m 479.65,162.77039 0,10"
+       d="m 480.25,162.77039 0,10"
        style="opacity:1;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1.5, 1.5;stroke-dashoffset:0;stroke-opacity:1" />
     <path
        inkscape:connector-curvature="0"
        id="path5215"
-       d="m 508.75,162.77039 0,10"
+       d="m 509.35,162.77039 0,10"
        style="opacity:1;fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:1.5, 1.5;stroke-dashoffset:0;stroke-opacity:1" />
     <g
        id="g5223"
