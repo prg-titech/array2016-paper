@@ -230,6 +230,8 @@ Figure~\ref{fig:overview_arch} gives a high-level overview of Ikra's compilation
     \label{fig:overview_arch}
 \end{figure}
 
+Ikra's type inference engine is fused with the \emph{object tracer}, which is the component that determines the set of objects that should be transferred to the GPU. Our current approach for type inference is one with multiple passes. Type inference for a method is repeated if the method reads an instance variable and the type of that variable is expanded while tracing objects (see Section~\ref{sec:impl_tracer}).
+
 \subsection{Integration in Ruby}
 Ikra transforms Ruby code to CUDA code at runtime when a parallel operation is invoked (dynamic compilation). Therefore, Ikra can determine the types of elements/variables that are passed into parallel sections at runtime instead of doing a dataflow analysis of the entire program. This is not only faster but also more robust in the light of reflection and metaprogramming, which is allowed outside of parallel sections but not inside them.
 
@@ -303,7 +305,7 @@ Ikra tries to avoid branch divergence due to polymorphic method calls on array e
 
 During job reordering the number of threads can increase as shown in Figure~\ref{fig:ex_job_reorder}. Jobs are reordered in such a way that no two elements of different types are allocated in the same warp. If the number of jobs of a particular type is not a multiple of the warp size, the last warp will not be filled up entirely, so some threads will not have a job, i.e., they are not \emph{no operation} threads. This might seem like a waste of computing power, but we expect the number of different types to be small (3 in this example).
 
-The job reordering array can be computed in linear time by scanning all elements of the base array twice. The algorithm is similar to counting sort and bucket sort~\cite{Corwin:2004:SLT:1040231.1040257}. It generates one array of indices per type (class) and concatenates these arrays, making sure that every new array starts at a multiple of the warp size (see Algorithm~1 in Section~\ref{sec:appendix_job_reorder}).
+The job reordering array can be computed in linear time by scanning all elements of the base array twice. The algorithm is similar to counting sort and bucket sort~\cite{Corwin:2004:SLT:1040231.1040257}. It generates one array of indices per type (class) and concatenates these arrays, making sure that every new array starts at a multiple of the warp size. %(see Algorithm~1 in Section~\ref{sec:appendix_job_reorder}).
 
 \subsection{Structure-of-Arrays Representation}
 In traditional programming languages and virtual machines, an array of objects is typically represented as an array of structures, i.e., every object is a contiguous chunk of data in the memory. However, it is common practice in GPU programming to work with multiple arrays of structure fields (\emph{structure-of-arrays}) instead of one array of structures (\emph{array-of-structures}) for coalescing field accesses~\cite{Mei2016, Abel:1999:ATS}.
@@ -373,6 +375,8 @@ As part of type inference, Ikra analyzes if an instance variable is read and/or 
 \label{sec:impl_tracer}
 The object tracer generates a set of objects that must be transferred to the GPU before kernel invocation. It starts with a set of root objects: all elements of the base array and lexical variables. Then, it traverses the object graph by following all instance variables that are read or written inside the parallel section. 
 
+Tracing objects can result in additional type inference passes. The reason for that are polymorphic expression and the fact that Ikra takes into account only read/written instance variables. During type inference, Ikra might notice that an instance variable \texttt{C.v} is read. Consequently, all instance variable values \texttt{v} of all instances of \texttt{C} must now be traced. During that process, Ikra might find an object of class \texttt{D}, where an instance variable value \texttt{w} appears with a type different from the ones seen before. In that case, Ikra must rerun type inference for all methods that read \texttt{D.w}.
+
 \section{Preliminary Benchmarks}
 To evaluate our optimizations, we conducted a series of hand-written benchmarks using the traffic simulation example\footnote{\texttt{git@github.com:matthias-springer/array2016-paper.git}}. We ran benchmarks on the TSUBAME supercomputer\footnote{\url{http://tsubame.gsic.titech.ac.jp/}} on a \emph{thin} compute node with two Intel Xeon X5670 CPUs (2.93~GHz $\times$ 6 cores each), 54~GB RAM, and three nVidia Tesla K20Xm GPUs (only one used), running Linux \texttt{3.0.76-0.11-default x86\_64}, CUDA 7.0.27, and Ruby 1.9.3p448.
 
@@ -390,6 +394,8 @@ Figure~\ref{fig:bench_kernel} shows the kernel running time of the traffic simul
 
 The objects involved in this example are quite small. Agents are represented by 32-byte structs (three instance variables and a class tag) in an AoS layout, or three 4-byte arrays (class tag is passed as an argument) in a SoA layout, respectively. The GPU's L1 cache is 48~KB, with a cache line size of 128~bytes. To analyze the effect of prefetching, we ran the AoS benchmark with artificially enlarged object sizes (10/5 additional instance variables that are never read or written for agents/streets, resulting in an object size of 72~bytes/32~bytes, respectively; Figure~\ref{fig:bench_kernel}c). This configuration is interesting because the example code accesses all instance variables of an agent subsequently, diminishing the advantage of a SoA layout, because the entire object (and three subsequent objects) can be held in cache (prefetching). A SoA layout is around 60\% faster compared to this configuration.
 
+The running time for transferring data to the GPU and generating the CUDA code is not included in this benchmark.
+
 \paragraph{Job Reordering}
 Figure~\ref{fig:job_reorder_arr} shows the running time for generating the job reordering array (warp size 32). This is currently done in the Ruby interpreter but could be moved to the GPU side in future versions. The running time increases linearly with the number of elements in the base array. Changing the number of types (classes) has only a small effect on the running time. We assume that this number is much smaller than the number of elements. For the traffic simulation example, the running time for generating the job reordering array is neglectable.
 
@@ -401,7 +407,7 @@ Figure~\ref{fig:job_reorder_arr} shows the running time for generating the job r
 \end{figure}
 
 \paragraph{Tracing Objects and Generating Structure of Arrays}
-Figure~\ref{fig:tracing} shows the running time for tracing objects and generating the SoA layout for the traffic simulation example. For the number of agents/streets that were used in the kernel benchmarks, the running time is neglectable. Moreover, in future versions of Ikra we want to perform this step only once and reuse data that was already processed and moved to the GPU earlier (see Section~\ref{sec:minimizing_dtr}).
+Figure~\ref{fig:tracing} shows the running time for tracing objects and generating the SoA layout for the traffic simulation example. For the number of agents/streets that were used in the kernel benchmarks, the running time is neglectable. Moreover, in future versions of Ikra we want to perform this step only once and reuse data that was already processed and moved to the GPU earlier (see Section~\ref{sec:minimizing_dtr}). The running time for type inference is not included in this benchmark.
 
 \begin{figure}[!htp]
     \includegraphics[width=\columnwidth]{obj_tracer.pdf}
@@ -409,8 +415,6 @@ Figure~\ref{fig:tracing} shows the running time for tracing objects and generati
     \caption{Running Time for Tracing Objects and Generating SoA (Ruby)}
     \label{fig:tracing}
 \end{figure}
-
-The running time for transferring data to the GPU and generating the CUDA code is not included in these benchmarks.
 
 \section{Related Work}
 Columnar (SoA) data layouts are known to be superior compared to row-based data layouts for certain kinds of database queries (e.g., OLAP queries)~\cite{Plattner:2009:CDA:1559845.1559846}, and especially for GPU-powered databases~\cite{Bakkum:2010:ASD:1735688.1735706}. In fact, one of the benefits of column stores for CPU-based database systems is \emph{prefetching}, which is similar to coalescing on GPUs, but without the parallel aspect. Columnar data layouts have also been evaluated for object-oriented programming languages. Mattis et al. have implemented a columnar object layout in Pypy to increase the performance of analytical queries~\cite{Mattis:2015:COI:2814228.2814230}. Ikra essentially uses the same columnar object layout, but extended to polymorphic types.
@@ -440,7 +444,7 @@ As another example, it is currently not possible to add or remove elements from 
 
 Ikra does currently not expose CUDA synchronization constructs~\cite{gpusync} or atomic operations. However, these constructs are necessary if computations between two threads are not independent.
 
-%\balance
+\balance
 
 \subsection{Nested Loops}
 \label{sec:nested_loops}
@@ -490,35 +494,5 @@ We presented Ikra, a dynamic Ruby-to-CUDA compiler for array-based parallel oper
 
 \bibliographystyle{plain}
 \bibliography{array2016}
-
-\appendix
-\section{Appendix: Algorithm Pseudo Code}
-\label{sec:appendix_job_reorder}
-\label{sec:appendix_obj_tracer}
-
-Algorithm~1 shows the pseudo code for generating the job reordering array. The parameters $\mathit{base}$ and $W$ are the base array and the warp size.
-
-\begin{algorithm}[!h]
-\caption{Job Reordering}
-\label{CHalgorithm}
-\begin{algorithmic}[1]
-\Procedure{ReorderingArray}{base, W}
-\State $\mathit{types} \gets$ Hash.new \hfill \textcolor{gray}{\textit{default value:} Array.new}
-\ForAll {$(\mathit{el}, \mathit{idx}) \in \mathit{base}$}
-    \State $\mathit{types}[\mathit{el}.\mbox{class}].\mbox{add}(\mathit{idx})$
-\EndFor
-\State $\mathit{result} \gets$ Array.new$(\sum_{\mathit{arr} \in \mathit{types}.\mathit{values}} \lceil |\mathit{arr}| / W \rceil * W)$
-\State $\mathit{next} \gets 0$
-\ForAll {$\mathit{arr} \in \mathit{types}.\mbox{values}$}
-    \ForAll {$\mathit{idx} \in \mathit{arr}$}
-        \State $\mathit{result}[\mathit{next}] = \mathit{idx}$
-        \State $\mathit{next} \gets \mathit{next} + 1$
-    \EndFor
-    \State $\mathit{next} \gets \lceil \mathit{next} / W \rceil * W$
-\EndFor
-\State \Return $\mathit{result}$
-\EndProcedure
-\end{algorithmic}
-\end{algorithm}
 
 \end{document}
