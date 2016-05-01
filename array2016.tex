@@ -246,7 +246,7 @@ After kernel execution, changed local variables and instance variables are copie
 In this section, we give an overview of interesting aspects and optimizations of Ikra's implementation.
 
 \subsection{Symbolic Execution}
-Parallel array operations (except for \texttt{peach}) are executed symbolically in Ikra. They can be cascaded and are executed only if the result is actually accessed. The default behavior is to spawn one thread per array element, which is why all these computations must be independent of each other. 
+Parallel array operations (except for \texttt{peach}) are executed symbolically (lazily) in Ikra. They can be cascaded and are executed only if the result is actually accessed. The default behavior is to spawn one thread per array element, which is why all these computations must be independent of each other. 
 
 Ikra performs \emph{kernel fusion}~\cite{Wu:2012:KWA:2457472.2457490, Wahib:2014:SKF:2683593.2683615}, i.e., cascaded parallel operations are merged into a single CUDA kernel to avoid reading/writing intermediate results from/to the global memory. Instead, they can be kept in registers. The process of merging two parallel blocks is not relevant in the scope of this paper and omitted.
 
@@ -262,7 +262,7 @@ Figure~\ref{fig:listing_cuda_main} shows the CUDA source code of the main loop o
 <@\textbf{\_\_global\_\_ void}@> kernel(<@\textbf{int}@> *jobs, <@\textbf{struct utype}@> *agent, <@\textbf{int}@> weather, <@\textbf{int}@> ticks)
 {
   <@\textbf{int}@> tid = blockIdx.x * blockDim.x + threadIdx.x;
-  block(agent[jobs[id]], weather, ticks);
+  block(agent[jobs[tid]], weather, ticks);
 }
 
 <@\textbf{\_\_device\_\_ void}@> block(<@\textbf{struct utype}@> agent, <@\textbf{int}@> weather, <@\textbf{int}@> ticks)
@@ -303,7 +303,7 @@ Ikra tries to avoid branch divergence due to polymorphic method calls on array e
     \label{fig:ex_job_reorder}
 \end{figure}
 
-During job reordering the number of threads can increase as shown in Figure~\ref{fig:ex_job_reorder}. Jobs are reordered in such a way that no two elements of different types are allocated in the same warp. If the number of jobs of a particular type is not a multiple of the warp size, the last warp will not be filled up entirely, so some threads will not have a job, i.e., they are not \emph{no operation} threads. This might seem like a waste of computing power, but we expect the number of different types to be small (3 in this example).
+During job reordering the number of threads can increase as shown in Figure~\ref{fig:ex_job_reorder}. Jobs are reordered in such a way that no two elements of different types are allocated in the same warp. If the number of jobs of a particular type is not a multiple of the warp size, the last warp will not be filled up entirely, so some threads will not have a job, i.e., they are \emph{no operation} threads. This might seem like a waste of computing power, but we expect the number of different types to be small (3 in this example).
 
 The job reordering array can be computed in linear time by scanning all elements of the base array twice. The algorithm is similar to counting sort and bucket sort~\cite{Corwin:2004:SLT:1040231.1040257}. It generates one array of indices per type (class) and concatenates these arrays, making sure that every new array starts at a multiple of the warp size. %(see Algorithm~1 in Section~\ref{sec:appendix_job_reorder}).
 
@@ -394,7 +394,7 @@ Figure~\ref{fig:bench_kernel} shows the kernel running time of the traffic simul
 
 The objects involved in this example are quite small. Agents are represented by 32-byte structs (three instance variables and a class tag) in an AoS layout, or three 4-byte arrays (class tag is passed as an argument) in a SoA layout, respectively. The GPU's L1 cache is 48~KB, with a cache line size of 128~bytes. To analyze the effect of prefetching, we ran the AoS benchmark with artificially enlarged object sizes (10/5 additional instance variables that are never read or written for agents/streets, resulting in an object size of 72~bytes/32~bytes, respectively; Figure~\ref{fig:bench_kernel}c). This configuration is interesting because the example code accesses all instance variables of an agent subsequently, diminishing the advantage of a SoA layout, because the entire object (and three subsequent objects) can be held in cache (prefetching). A SoA layout is around 60\% faster compared to this configuration.
 
-The running time for transferring data to the GPU and generating the CUDA code is not included in this benchmark.
+The running time for transferring data to the GPU and generating the CUDA code is not included in this benchmark. These two steps are currently clearly dominated by the execution time of the nVidia compiler (\texttt{nvcc}), which is around 2-4 seconds. We hope to be able to reduce the running time of this step by caching and by generating LLVM intermediate code from Ruby bytecode, which would skip some steps in the CUDA compilation process (see Section~\ref{sec:related_work}).
 
 \paragraph{Job Reordering}
 Figure~\ref{fig:job_reorder_arr} shows the running time for generating the job reordering array (warp size 32). This is currently done in the Ruby interpreter but could be moved to the GPU side in future versions. The running time increases linearly with the number of elements in the base array. Changing the number of types (classes) has only a small effect on the running time. We assume that this number is much smaller than the number of elements. For the traffic simulation example, the running time for generating the job reordering array is neglectable.
@@ -417,6 +417,7 @@ Figure~\ref{fig:tracing} shows the running time for tracing objects and generati
 \end{figure}
 
 \section{Related Work}
+\label{sec:related_work}
 Columnar (SoA) data layouts are known to be superior compared to row-based data layouts for certain kinds of database queries (e.g., OLAP queries)~\cite{Plattner:2009:CDA:1559845.1559846}, and especially for GPU-powered databases~\cite{Bakkum:2010:ASD:1735688.1735706}. In fact, one of the benefits of column stores for CPU-based database systems is \emph{prefetching}, which is similar to coalescing on GPUs, but without the parallel aspect. Columnar data layouts have also been evaluated for object-oriented programming languages. Mattis et al. have implemented a columnar object layout in Pypy to increase the performance of analytical queries~\cite{Mattis:2015:COI:2814228.2814230}. Ikra essentially uses the same columnar object layout, but extended to polymorphic types.
 
 A number of different techniques exist for avoiding branch divergence. Most of them are proposed at application-level, while Ikra aims at enabling a similar technique at the language level. For example, one technique is to detect and delay divergent branches at runtime in order to execute them at a later time~\cite{88d22b7f17}, or factoring out instructions that are common to two (divergent) branches~\cite{Han:2011:RBD:1964179.1964184}. A different approach is to reorder jobs, either with a reordering array (which is what Ikra does) or by physically changing the order of the jobs in the base array. Both techniques can be combined to increase memory coalescing~\cite{Zhang:2011:OED:1950365.1950408} (physically reordering data, then using a reordering array to restore the original semantics), but detailed knowledge about memory access patterns is required. Previous work has also investigated how the overhead of these transformations can be hidden using a CPU-GPU pipelining scheme~\cite{Zhang:2010:SGA:1810085.1810104}, if done at runtime in order to react to changes.
@@ -432,7 +433,7 @@ This section gives a brief overview of ideas for future work on Ikra.
 \label{sec:minimizing_dtr}
 Our current Ikra implementation transfers objects to the GPU's global memory every time a kernel is invoked. However, memory access is one of the main bottlenecks of GPUs and should be avoided. Future versions of Ikra will try to minimize data transfers by only transferring changed objects during consecutive kernel invocations, even if two different kernels were invoked. Similarly, objects should only be transferred back to the Ruby side once they are actually accessed. One approach replaces instance variable accessors with code that retrieves the actual value from the GPU and caches it.
 
-It is our vision that the parallel CUDA code is in full control of instance creation. The only reason for transferring data to the GPU should be cases where an object graph is loaded from an external source or must be swapped from/to the main memory. For example, a researcher might want to load a street network of a real city from the file system. It is then not necessary to allocate this data structure both on the GPU and on Ruby side. The Ruby program might, however, access certain objects and some of their instance variables for UI purposes or to display the result of a computation.
+It is our vision that the parallel CUDA code is in full control of instance creation. The only reason for transferring data to the GPU should be cases where an object graph is loaded from an external source or must be swapped from/to the main memory. For example, a researcher might want to load a street network of a real city from the file system. It is then not necessary to allocate this data structure both on the GPU and on the Ruby side. The Ruby program might, however, access certain objects and some of their instance variables for UI purposes or to display the result of a computation.
 
 \subsection{Data Modification}
 \label{sec:gen_new_obj}
@@ -476,12 +477,12 @@ The following code snippet resembles most accurately what the code in Section~2 
 <@\textbf{end}@>
 \end{lstlisting}
 
-Nesting two parallel \texttt{peach} statements within each other is not supported at moment. Parallelization is allowed only on one level. In future versions of Ikra, data will be held in the global memory as long as possible and only be transferred from/to the Ruby side if necessary (see Section~\ref{sec:minimizing_dtr}). In such a situation, code that is similar to the one shown in the previous listing could be written with less kernel invocation overhead.
+Nesting two parallel \texttt{peach} statements within each other is not supported at the moment. Parallelization is allowed only on one level. In future versions of Ikra, data will be held in the global memory as long as possible and only be transferred from/to the Ruby side if necessary (see Section~\ref{sec:minimizing_dtr}). In such a situation, code that is similar to the one shown in the previous listing could be written with less kernel invocation overhead.
 
 \subsection{Performance Optimizations}
 Further ideas for performance optimizations include taking advantage of shared memory, which is much faster than global memory. However, it is not obvious what kind of data to store in shared memory because of its limited size.
 
-Ikra's SoA object layout is similar to the data layout of column databases. Future work might investigate to what degree optimizations in the area of column databases~\cite{DBLP:journals/ftdb/AbadiBHIM13, DBLP:journals/corr/LinMPS16} are applicable to a column-based object graph. Data compression mechanisms for minimizing data transfer time look particularly promising, given the performance gap between global memory and shared memory, and have been subject to previous work in GPU computing~\cite{Patel:2012:PLD, Przymus2012}.
+Ikra's SoA object layout is similar to the data layout of column databases. Future work might investigate to what degree optimizations in the area of column databases~\cite{DBLP:journals/ftdb/AbadiBHIM13} are applicable to a column-based object graph. Data compression mechanisms for minimizing data transfer time look particularly promising, given the performance gap between global memory and shared memory, and have been subject to previous work in GPU computing~\cite{Patel:2012:PLD, Przymus2012}.
 
 % Only write back objects if they are accessed; how can we hook into object access? Proxies?
 
