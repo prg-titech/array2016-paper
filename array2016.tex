@@ -20,7 +20,7 @@
 %-----------------------------------------------------------------------------
 
 
-\documentclass[preprint]{sigplanconf}
+\documentclass[]{sigplanconf}
 
 % The following \documentclass options may be useful:
 
@@ -140,10 +140,10 @@ escapechar=`,
 \titlebanner{Submitted for review to ARRAY 2016}        % These are ignored unless
 \preprintfooter{Object Support in an Array-based GPGPU Extension for Ruby}   % 'preprint' option specified.
 
-\title{Object Support in an Array-based GPGPU Extension for Ruby}
+\title{Object Support in an Array-Based GPGPU Extension for Ruby}
 %\title{A Layer-based Approach to Hierarchical Dynamically-scoped Class Extensions}
 
-\subtitle{Research Paper}
+%\subtitle{Research Paper}
 
 \newcommand\Mark[1]{\textsuperscript#1}  
 \authorinfo{Matthias Springer\and Hidehiko Masuhara}
@@ -308,6 +308,7 @@ During job reordering the number of threads can increase as shown in Figure~\ref
 The job reordering array can be computed in linear time by scanning all elements of the base array twice. The algorithm is similar to counting sort and bucket sort~\cite{Corwin:2004:SLT:1040231.1040257}. It generates one array of indices per type (class) and concatenates these arrays, making sure that every new array starts at a multiple of the warp size. %(see Algorithm~1 in Section~\ref{sec:appendix_job_reorder}).
 
 \subsection{Structure-of-Arrays Representation}
+\label{sec:soa_rep}
 In traditional programming languages and virtual machines, an array of objects is typically represented as an array of structures, i.e., every object is a contiguous chunk of data in the memory. However, it is common practice in GPU programming to work with multiple arrays of structure fields (\emph{structure-of-arrays}) instead of one array of structures (\emph{array-of-structures}) for coalescing field accesses~\cite{Mei2016, Abel:1999:ATS}.
 
 \paragraph{Memory Coalescing}
@@ -424,7 +425,7 @@ A number of different techniques exist for avoiding branch divergence. Most of t
 
 Ishizaki et al. presented a framework for executing lambda expression used with the parallel streams API in Java~8 programs on nVidia GPUs~\cite{ishizaki2015compiling}. Their approach is to generate LLVM intermediate code (IR) from Java bytecode, which is in our opinion superior to Ikra's approach of performing a Ruby-to-CUDA source-code-to-source-code transformation from an engineering point of view. Future versions of Ikra might generate LLVM IR code from YARV bytecode~\cite{Sasada:2005:YYR:1094855.1094912}. Further optimizations of their Java~8 compiler include a check for array aliasing (which is what Ikra's object tracer does implicitly) and utilizing a read-only cache. Their implementation supports virtual method calls using direct devirtualization if the receiver type can be uniquely determined at compile time, or guarded devirtualization, executing an iteration on the GPU if the guard fails; in either case, the GPU code must only be able to handle monomorphic method calls. Ikra's code generator applies direct devirtualization, i.e., it does not generate type dispatch statements if the receiver type is monomorphic and can be inferred unambiguously. Otherwise, it generates CUDA code that dispatches to the correct method based on class tags.
 
-Firepile is a Scala-to-CUDA compiler~\cite{Nystrom:2011:FRC:2047862.2047883}. It supports Scala classes and generates a struct definition per class. The first field has as type the struct type for the superclass and is needed for inherited instance variables. The struct for \texttt{Object} contains a class tag used for method dispatch. Ikra passes and stores class tags together with object IDs. If class tags were stored in one column shared by all objects, then all objects (and types) would have to follow the same numbering scheme, which would lead to sparse columns and a waste of global memory. The same problem occurs already in a less severe form in the light of subclassing (see Section~\ref{sec:polymorphic}, \emph{null} values).
+Firepile is a Scala-to-CUDA compiler~\cite{Nystrom:2011:FRC:2047862.2047883}. It supports Scala classes and generates a struct definition per class. The first field has as type the struct type for the superclass and is needed for inherited instance variables. The struct for \texttt{Object} contains a class tag used for method dispatch. Ikra passes and stores class tags together with object IDs. If class tags were stored in one column shared by all objects, then all objects (and types) would have to follow the same numbering scheme, which would lead to sparse columns and a waste of global memory. The same problem occurs already in a less severe form in the light of subclassing (see Section~\ref{sec:soa_rep}, \emph{null} values).
 
 \section{Future Work}
 This section gives a brief overview of ideas for future work on Ikra.
@@ -483,6 +484,8 @@ Nesting two parallel \texttt{peach} statements within each other is not supporte
 Further ideas for performance optimizations include taking advantage of shared memory, which is much faster than global memory. However, it is not obvious what kind of data to store in shared memory because of its limited size.
 
 Ikra's SoA object layout is similar to the data layout of column databases. Future work might investigate to what degree optimizations in the area of column databases~\cite{DBLP:journals/ftdb/AbadiBHIM13} are applicable to a column-based object graph. Data compression mechanisms for minimizing data transfer time look particularly promising, given the performance gap between global memory and shared memory, and have been subject to previous work in GPU computing~\cite{Patel:2012:PLD, Przymus2012}.
+
+Ikra currently allocates one thread per array item. However, the number and size of blocks has a crucial effect on the overall performance. Future versions of Ikra will contain heuristics to decide how many array elements to process per threads. Based on Volkov's observations~\cite{volkov2010better}, we plan to generate interleaved code that takes advantage of instruction-level parallelism, among other things depending on how many registers are necessary to process a single array item.
 
 % Only write back objects if they are accessed; how can we hook into object access? Proxies?
 

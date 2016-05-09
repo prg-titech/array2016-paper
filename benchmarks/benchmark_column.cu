@@ -12,6 +12,7 @@
 //#include <random>
 //#include <array> 
 #include <algorithm> 
+#include <cuda_runtime_api.h>
 
 #define NUM_CARS 4096
 #define NUM_PEDS 16384
